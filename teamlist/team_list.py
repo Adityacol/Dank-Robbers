@@ -69,7 +69,7 @@ class StaffListCog(commands.Cog):
 
     async def create_staff_list_embed(self, guild):
         embed = discord.Embed(title="Our Staff", color=discord.Color.blue())
-        embed.set_footer(text="<:Cool_Pikachu:1246122508181049466>" "Made by aditya")  # Replace with your footer icon URL
+        embed.set_footer(text="<:Cool_Pikachu:1246122508181049466> Made by aditya")  # Replace with your footer icon URL
         embed.set_image(url="https://images-ext-1.discordapp.net/external/Jix1PZm5CLa9S1B6_nnTwtDgZRR_P1ACE9-h2NeGtlA/%3Fformat%3Dwebp%26quality%3Dlossless%26width%3D1148%26height%3D280/https/images-ext-1.discordapp.net/external/fveQb3JWpUuhkPQ6lgZiNqQcssFLceGKIjNiL6xrd_0/%253Fformat%253Dwebp%2526quality%253Dlossless%2526width%253D1044%2526height%253D255/https/images-ext-2.discordapp.net/external/7oZZFuziueGVvFwbvwmUJnS1KnRASQGy00B7fK2UtU0/https/www.helloexmouth.co.uk/wp-content/uploads/spheader-meettheteam.png?format=webp&quality=lossless&width=870&height=212")  # Replace with your footer image URL
 
         for role_info in self.staff_roles:
@@ -79,18 +79,16 @@ class StaffListCog(commands.Cog):
             if role:
                 members = role.members
                 member_status_list = [
-                    f"<a:arrow:1075563743477497946> {member.mention} {self.get_status_emoji(member.status)}"
+                                        f"<a:arrow:1075563743477497946> {member.mention} {self.get_status_emoji(member.status)}"
                     for member in members
                 ]
-                if member_status_list:
-                    # Split into multiple fields if the length exceeds the limit
-                    num_chunks = len(member_status_list) // 25 + 1
-                    for i in range(num_chunks):
-                        chunk = member_status_list[i * 25: (i + 1) * 25]
-                        field_value = "\n".join(chunk)
-                        embed.add_field(name=f"{role_name} (Part {i+1})", value=field_value, inline=False)
-                else:
-                    embed.add_field(name=role_name, value="No members", inline=False)
+                # Splitting members into multiple fields if needed
+                while member_status_list:
+                    field_value = "\n".join(member_status_list[:25])  # Limiting to 25 members per field
+                    member_status_list = member_status_list[25:]  # Remove processed members
+                    if len(field_value) > 1024:
+                        field_value = field_value[:1021] + "..."  # Truncate if necessary
+                    embed.add_field(name=role_name, value=field_value, inline=False)
         return embed
 
     async def auto_update_staff_list(self):
@@ -122,10 +120,10 @@ class StaffListCog(commands.Cog):
 
     def get_status_emoji(self, status):
         status_emojis = {
-            discord.Status.online: "<:onlinestatus:1246105208040329337>",
-                        discord.Status.offline: "<:offlinestatus:1246105188755046400>",
-            discord.Status.idle: "<:idlestatus:1246105216848232560>",
-            discord.Status.dnd: "<:dndstatus:1246105225144569977>"
+            discord.Status.online: "<:onlinestatus:1246105208040329337>",  # Replace with your custom emoji ID
+            discord.Status.offline: "<:offlinestatus:1246105188755046400>",  # Replace with your custom emoji ID
+            discord.Status.idle: "<:idlestatus:1246105216848232560>",  # Replace with your custom emoji ID
+            discord.Status.dnd: "<:dndstatus:1246105225144569977>"  # Replace with your custom emoji ID
         }
         return status_emojis.get(status, ":white_circle:")
 
