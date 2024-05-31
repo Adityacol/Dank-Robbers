@@ -83,10 +83,12 @@ class StaffListCog(commands.Cog):
                     for member in members
                 ]
                 if member_status_list:
-                    field_value = "\n".join(member_status_list)
-                    if len(field_value) > 1024:
-                        field_value = field_value[:1021] + "..."  # Truncate if necessary
-                    embed.add_field(name=role_name, value=field_value, inline=False)
+                    # Split into multiple fields if the length exceeds the limit
+                    num_chunks = len(member_status_list) // 25 + 1
+                    for i in range(num_chunks):
+                        chunk = member_status_list[i * 25: (i + 1) * 25]
+                        field_value = "\n".join(chunk)
+                        embed.add_field(name=f"{role_name} (Part {i+1})", value=field_value, inline=False)
                 else:
                     embed.add_field(name=role_name, value="No members", inline=False)
         return embed
@@ -120,12 +122,13 @@ class StaffListCog(commands.Cog):
 
     def get_status_emoji(self, status):
         status_emojis = {
-            discord.Status.online: "<:onlinestatus:1246105208040329337>",  # Replace with your custom emoji ID
-            discord.Status.offline: "<:offlinestatus:1246105188755046400>",  # Replace with your custom emoji ID
-            discord.Status.idle: "<:idlestatus:1246105216848232560>",  # Replace with your custom emoji ID
-            discord.Status.dnd: "<:dndstatus:1246105225144569977>"  # Replace with your custom emoji ID
+            discord.Status.online: "<:onlinestatus:1246105208040329337>",
+                        discord.Status.offline: "<:offlinestatus:1246105188755046400>",
+            discord.Status.idle: "<:idlestatus:1246105216848232560>",
+            discord.Status.dnd: "<:dndstatus:1246105225144569977>"
         }
         return status_emojis.get(status, ":white_circle:")
 
 def setup(bot):
     bot.add_cog(StaffListCog(bot))
+
