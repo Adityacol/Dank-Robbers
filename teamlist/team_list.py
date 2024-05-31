@@ -83,7 +83,10 @@ class StaffListCog(commands.Cog):
                     for member in members
                 ]
                 if member_status_list:
-                    embed.add_field(name=role_name, value="\n".join(member_status_list), inline=False)
+                    field_value = "\n".join(member_status_list)
+                    if len(field_value) > 1024:
+                        field_value = field_value[:1021] + "..."  # Truncate if necessary
+                    embed.add_field(name=role_name, value=field_value, inline=False)
                 else:
                     embed.add_field(name=role_name, value="No members", inline=False)
         return embed
