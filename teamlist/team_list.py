@@ -11,7 +11,7 @@ class StaffListCog(commands.Cog):
         self.staff_roles = self.load_staff_roles()
         self.staff_list_channel_id = None
         self.staff_list_message_id = None
-        self.update_interval = 300  # Update interval in seconds (e.g., 300 seconds = 5 minutes)
+        self.update_interval = 30  # Update interval in seconds (e.g., 300 seconds = 5 minutes)
 
     def load_staff_roles(self):
         if os.path.exists(self.data_file):
