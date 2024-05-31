@@ -79,7 +79,7 @@ class StaffListCog(commands.Cog):
             if role:
                 members = role.members
                 member_status_list = [
-                                        f"<a:arrow:1075563743477497946> {member.mention} {self.get_status_emoji(member.status)}"
+                                        f"☞ {member.mention} {self.get_status_emoji(member.status)}"
                     for member in members
                 ]
                 # Splitting members into multiple fields if needed
