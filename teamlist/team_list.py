@@ -10,6 +10,7 @@ class StaffListCog(commands.Cog):
         self.data_file = 'team_config.json'
         self.staff_roles = self.load_staff_roles()
         self.staff_list_message_id = None  # Store the message ID of the staff list message
+        self.update_interval = 300  # Update interval in seconds (e.g., 300 seconds = 5 minutes)
 
     def load_staff_roles(self):
         if os.path.exists(self.data_file):
@@ -24,7 +25,7 @@ class StaffListCog(commands.Cog):
 
     @commands.command()
     async def add_role(self, ctx, role: discord.Role):
-        if role.id not in self.staff_roles:
+        if role.id not in [r["id"] for r in self.staff_roles]:
             self.staff_roles.append({"name": role.name, "id": role.id})
             self.save_staff_roles()
             await ctx.send(f"Role '{role.name}' added to the staff list.")
@@ -71,7 +72,7 @@ class StaffListCog(commands.Cog):
                     embed.add_field(name=role_name, value="\n".join(member_status_list), inline=False)
                 else:
                     embed.add_field(name=role_name, value="No members", inline=False)
-        
+
         # Send or edit the embed
         if self.staff_list_message_id:
             try:
@@ -84,6 +85,18 @@ class StaffListCog(commands.Cog):
             staff_list_message = await channel.send(embed=embed)
             self.staff_list_message_id = staff_list_message.id
 
+    async def auto_update_staff_list(self):
+        await self.bot.wait_until_ready()
+        while not self.bot.is_closed():
+            for guild in self.bot.guilds:
+                for channel in guild.text_channels:
+                    try:
+                        staff_list_message = await channel.fetch_message(self.staff_list_message_id)
+                        await self.generate_staff_list(channel)
+                    except (discord.NotFound, discord.Forbidden):
+                        pass
+            await asyncio.sleep(self.update_interval)
+
     def get_status_emoji(self, status):
         status_emojis = {
             discord.Status.online: ":green_circle:",
@@ -94,4 +107,6 @@ class StaffListCog(commands.Cog):
         return status_emojis.get(status, ":white_circle:")
 
 def setup(bot):
-    bot.add_cog(StaffListCog(bot))
+    cog = StaffListCog(bot)
+    bot.add_cog(cog)
+    bot.loop.create_task(cog.auto_update_staff_list())
