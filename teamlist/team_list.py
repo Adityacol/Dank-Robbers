@@ -69,8 +69,9 @@ class StaffListCog(commands.Cog):
 
     async def create_staff_list_embed(self, guild):
         embed = discord.Embed(title="Our Staff", color=discord.Color.blue())
-        embed.set_thumbnail(url="https://images-ext-1.discordapp.net/external/ddLLWUutTzUJUABcpTJl_xFqke-4fNkje4IYxEiHiZM/%3Fformat%3Dwebp%26width%3D211%26height%3D196/https/images-ext-1.discordapp.net/external/R6VId5otSXLbdUlt4WtsUpmUlvBPeWCdGuafoWbsF_A/%253Fformat%253Dwebp%2526width%253D172%2526height%253D160/https/images-ext-1.discordapp.net/external/cm4p0Ewcngpp2El0CF6XTgaTwbXj0FKBEbxnox3uRlw/%25253Fsize%25253D240%252526quality%25253Dlossless/https/cdn.discordapp.com/emojis/1038110732383961209.webp?format=webp&width=160&height=148")  # Replace with your thumbnail URL
-        embed.set_footer(text="*Made by Aditya*", icon_url="https://images-ext-1.discordapp.net/external/Jix1PZm5CLa9S1B6_nnTwtDgZRR_P1ACE9-h2NeGtlA/%3Fformat%3Dwebp%26quality%3Dlossless%26width%3D1148%26height%3D280/https/images-ext-1.discordapp.net/external/fveQb3JWpUuhkPQ6lgZiNqQcssFLceGKIjNiL6xrd_0/%253Fformat%253Dwebp%2526quality%253Dlossless%2526width%253D1044%2526height%253D255/https/images-ext-2.discordapp.net/external/7oZZFuziueGVvFwbvwmUJnS1KnRASQGy00B7fK2UtU0/https/www.helloexmouth.co.uk/wp-content/uploads/spheader-meettheteam.png?format=webp&quality=lossless&width=870&height=212")  # Replace with your footer icon URL
+        embed.set_thumbnail(url="https://images-ext-1.discordapp.net/external/Jix1PZm5CLa9S1B6_nnTwtDgZRR_P1ACE9-h2NeGtlA/%3Fformat%3Dwebp%26quality%3Dlossless%26width%3D1148%26height%3D280/https/images-ext-1.discordapp.net/external/fveQb3JWpUuhkPQ6lgZiNqQcssFLceGKIjNiL6xrd_0/%253Fformat%253Dwebp%2526quality%253Dlossless%2526width%253D1044%2526height%253D255/https/images-ext-2.discordapp.net/external/7oZZFuziueGVvFwbvwmUJnS1KnRASQGy00B7fK2UtU0/https/www.helloexmouth.co.uk/wp-content/uploads/spheader-meettheteam.png?format=webp&quality=lossless&width=870&height=212")  # Replace with your thumbnail URL
+        embed.set_footer(text="Footer text here", icon_url="https://path.to/your/footer_icon.jpg")  # Replace with your footer icon URL
+        embed.set_image(url="https://images-ext-1.discordapp.net/external/ddLLWUutTzUJUABcpTJl_xFqke-4fNkje4IYxEiHiZM/%3Fformat%3Dwebp%26width%3D211%26height%3D196/https/images-ext-1.discordapp.net/external/R6VId5otSXLbdUlt4WtsUpmUlvBPeWCdGuafoWbsF_A/%253Fformat%253Dwebp%2526width%253D172%2526height%253D160/https/images-ext-1.discordapp.net/external/cm4p0Ewcngpp2El0CF6XTgaTwbXj0FKBEbxnox3uRlw/%25253Fsize%25253D240%252526quality%25253Dlossless/https/cdn.discordapp.com/emojis/1038110732383961209.webp?format=webp&width=160&height=148")  # Replace with your footer image URL
 
         for role_info in self.staff_roles:
             role_id = role_info.get("id")
@@ -120,10 +121,10 @@ class StaffListCog(commands.Cog):
 
     def get_status_emoji(self, status):
         status_emojis = {
-            discord.Status.online: "<online:1246105208040329337>",  # Replace with your custom emoji ID
-            discord.Status.offline: "<offline_status:1246105188755046400>",  # Replace with your custom emoji ID
-            discord.Status.idle: "<idle:1246105216848232560>",  # Replace with your custom emoji ID
-            discord.Status.dnd: "<dnd:1246105225144569977>"  # Replace with your custom emoji ID
+            discord.Status.online: "<:onlinestatus:1246105208040329337>",  # Replace with your custom emoji ID
+            discord.Status.offline: "<:offlinestatus:1246105188755046400>",  # Replace with your custom emoji ID
+            discord.Status.idle: "<:idlestatus:1246105216848232560>",  # Replace with your custom emoji ID
+            discord.Status.dnd: "<:dndstatus:1246105225144569977>"  # Replace with your custom emoji ID
         }
         return status_emojis.get(status, ":white_circle:")
 
