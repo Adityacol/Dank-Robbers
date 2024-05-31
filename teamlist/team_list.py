@@ -69,6 +69,9 @@ class StaffListCog(commands.Cog):
 
     async def create_staff_list_embed(self, guild):
         embed = discord.Embed(title="Our Staff", color=discord.Color.blue())
+        embed.set_thumbnail(url="https://path.to/your/thumbnail.jpg")  # Replace with your thumbnail URL
+        embed.set_footer(text="Footer text here", icon_url="https://path.to/your/footer.jpg")  # Replace with your footer icon URL
+
         for role_info in self.staff_roles:
             role_id = role_info.get("id")
             role_name = role_info.get("name")
@@ -76,7 +79,7 @@ class StaffListCog(commands.Cog):
             if role:
                 members = role.members
                 member_status_list = [
-                    f"{self.get_status_emoji(member.status)} {member.mention}"
+                    f"<a:arrow:1075563743477497946> {member.mention} {self.get_status_emoji(member.status)}"
                     for member in members
                 ]
                 if member_status_list:
@@ -114,10 +117,10 @@ class StaffListCog(commands.Cog):
 
     def get_status_emoji(self, status):
         status_emojis = {
-            discord.Status.online: ":green_circle:",
-            discord.Status.offline: ":black_circle:",
-            discord.Status.idle: ":yellow_circle:",
-            discord.Status.dnd: ":red_circle:"
+            discord.Status.online: "<a:online:1246105208040329337>",  # Replace with your custom emoji ID
+            discord.Status.offline: "<a:offline_status:1246105188755046400>",  # Replace with your custom emoji ID
+            discord.Status.idle: "<a:idle:1246105216848232560>",  # Replace with your custom emoji ID
+            discord.Status.dnd: "<a:dnd:1246105225144569977>"  # Replace with your custom emoji ID
         }
         return status_emojis.get(status, ":white_circle:")
 
