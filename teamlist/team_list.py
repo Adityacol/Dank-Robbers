@@ -32,7 +32,7 @@ class StaffListCog(commands.Cog):
             self.staff_roles.append({"name": role.name, "id": role.id})
             self.save_staff_roles()
             await ctx.send(f"Role '{role.name}' added to the staff list.")
-            await self.update_staff_list(ctx)
+            await self.update_staff_list(ctx.guild)
         else:
             await ctx.send(f"Role '{role.name}' is already in the staff list.")
 
@@ -44,7 +44,7 @@ class StaffListCog(commands.Cog):
                 self.staff_roles.remove(r)
                 self.save_staff_roles()
                 await ctx.send(f"Role '{role.name}' removed from the staff list.")
-                await self.update_staff_list(ctx)
+                await self.update_staff_list(ctx.guild)
                 return
         await ctx.send(f"Role '{role.name}' is not in the staff list.")
 
@@ -99,6 +99,18 @@ class StaffListCog(commands.Cog):
                         self.staff_list_message_id = None
                         self.staff_list_channel_id = None
             await asyncio.sleep(self.update_interval)
+
+    async def update_staff_list(self, guild):
+        if self.staff_list_channel_id and self.staff_list_message_id:
+            staff_list_channel = self.bot.get_channel(self.staff_list_channel_id)
+            if staff_list_channel:
+                try:
+                    staff_list_message = await staff_list_channel.fetch_message(self.staff_list_message_id)
+                    embed = await self.create_staff_list_embed(guild)
+                    await staff_list_message.edit(embed=embed)
+                except (discord.NotFound, discord.Forbidden):
+                    self.staff_list_message_id = None
+                    self.staff_list_channel_id = None
 
     def get_status_emoji(self, status):
         status_emojis = {
