@@ -11,7 +11,7 @@ class StaffListCog(commands.Cog):
         self.staff_roles = self.load_staff_roles()
         self.update_interval = 60  # Update interval in seconds (e.g., 600 seconds = 10 minutes)
         self.channel_id = 1045701383430606879  # Replace CHANNEL_ID with the actual channel ID
-        self.staff_list_message = None  # Store the staff list message
+        self.staff_list_message_id = None  # Store the staff list message ID
         self.generate_staff_list_task = self.bot.loop.create_task(self.auto_update_staff_list())
 
     def load_staff_roles(self):
@@ -39,15 +39,18 @@ class StaffListCog(commands.Cog):
                         embed.add_field(name=role_name, value="\n".join(member_status_list), inline=False)
                     else:
                         embed.add_field(name=role_name, value="No members", inline=False)
-            await channel.send(embed=embed)
+            if self.staff_list_message_id:
+                staff_list_message = await channel.fetch_message(self.staff_list_message_id)
+                await staff_list_message.edit(embed=embed)
+            else:
+                staff_list_message = await channel.send(embed=embed)
+                self.staff_list_message_id = staff_list_message.id
 
     async def auto_update_staff_list(self):
         await self.bot.wait_until_ready()
-        channel = self.bot.get_channel(self.channel_id)
-        if channel:
-            while not self.bot.is_closed():
-                await self.generate_staff_list()
-                await asyncio.sleep(self.update_interval)
+        while not self.bot.is_closed():
+            await self.generate_staff_list()
+            await asyncio.sleep(self.update_interval)
 
     def get_status_emoji(self, status):
         status_emojis = {
