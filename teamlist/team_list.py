@@ -25,17 +25,24 @@ class StaffListCog(commands.Cog):
         channel = self.bot.get_channel(self.channel_id)
         if channel:
             embed = discord.Embed(title="Our Staff", color=discord.Color.blue())
+            print("Loaded roles:", self.staff_roles)
             for role_info in self.staff_roles:
                 role_id = role_info.get("id")
                 role_name = role_info.get("name")
+                print(f"Checking role '{role_name}' ({role_id})")
                 role = discord.utils.get(channel.guild.roles, id=role_id)
                 if role:
+                    print(f"Role '{role_name}' found.")
                     members = role.members
+                    print(f"Members of role '{role_name}':", members)
                     member_list = [member.display_name for member in members]
                     if member_list:
                         embed.add_field(name=role_name, value="\n".join(member_list), inline=False)
                     else:
                         embed.add_field(name=role_name, value="No members", inline=False)
+                else:
+                    print(f"Role '{role_name}' not found in the server.")
+            print("Sending embed:", embed.to_dict())
             if self.staff_list_message_id:
                 staff_list_message = await channel.fetch_message(self.staff_list_message_id)
                 await staff_list_message.edit(embed=embed)
