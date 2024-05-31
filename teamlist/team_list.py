@@ -2,12 +2,14 @@ import discord
 from redbot.core import commands
 import json
 import os
+import asyncio
 
 class StaffListCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.data_file = 'team_config.json'
         self.staff_roles = self.load_staff_roles()
+        self.generate_staff_list_task = self.bot.loop.create_task(self.generate_staff_list())
 
     def load_staff_roles(self):
         if os.path.exists(self.data_file):
@@ -46,7 +48,7 @@ class StaffListCog(commands.Cog):
             if role:
                 members = role.members
                 member_status_list = [
-                    f"{member.mention}: {self.get_status_emoji(member.status)} {member.status}"
+                    f"{member.display_name}: {self.get_status_emoji(member.status)} {member.status}"
                     for member in members
                 ]
                 if member_status_list:
@@ -63,6 +65,27 @@ class StaffListCog(commands.Cog):
             discord.Status.dnd: ":red_circle:"
         }
         return status_emojis.get(status, ":white_circle:")
+
+    async def generate_staff_list(self):
+        while True:
+            await self.bot.wait_until_ready()
+            channel = self.bot.get_channel(1045701383430606879)  # Replace 'your_channel_id' with the actual channel ID
+            if channel:
+                embed = discord.Embed(title="Our Staff", color=discord.Color.blue())
+                for role_id in self.staff_roles:
+                    role = channel.guild.get_role(role_id)
+                    if role:
+                        members = role.members
+                        member_status_list = [
+                            f"{member.display_name}: {self.get_status_emoji(member.status)} {member.status}"
+                            for member in members
+                        ]
+                        if member_status_list:
+                            embed.add_field(name=role.name, value="\n".join(member_status_list), inline=False)
+                        else:
+                            embed.add_field(name=role.name, value="No members", inline=False)
+                await channel.send(embed=embed)
+            await asyncio.sleep(600)  # Update every 10 minutes
 
 def setup(bot):
     bot.add_cog(StaffListCog(bot))
