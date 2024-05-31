@@ -10,7 +10,7 @@ class StaffListCog(commands.Cog):
         self.data_file = 'team_config.json'
         self.staff_roles = self.load_staff_roles()
         self.staff_list_message_id = None  # Store the message ID of the staff list message
-        self.update_interval = 300  # Update interval in seconds (e.g., 300 seconds = 5 minutes)
+        self.update_interval = 60  # Update interval in seconds (e.g., 300 seconds = 5 minutes)
 
     def load_staff_roles(self):
         if os.path.exists(self.data_file):
