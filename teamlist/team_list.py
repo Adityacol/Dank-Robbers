@@ -9,8 +9,9 @@ class StaffListCog(commands.Cog):
         self.bot = bot
         self.data_file = 'team_config.json'
         self.staff_roles = self.load_staff_roles()
-        self.staff_list_message_id = None  # Store the message ID of the staff list message
-        self.update_interval = 60  # Update interval in seconds (e.g., 300 seconds = 5 minutes)
+        self.staff_list_channel_id = None
+        self.staff_list_message_id = None
+        self.update_interval = 300  # Update interval in seconds (e.g., 300 seconds = 5 minutes)
 
     def load_staff_roles(self):
         if os.path.exists(self.data_file):
@@ -45,15 +46,6 @@ class StaffListCog(commands.Cog):
                 return
         await ctx.send(f"Role '{role.name}' is not in the staff list.")
 
-    async def update_staff_list(self, ctx):
-        await self.generate_staff_list(ctx)
-        if self.staff_list_message_id:
-            try:
-                staff_list_message = await ctx.channel.fetch_message(self.staff_list_message_id)
-                await staff_list_message.delete()
-            except discord.NotFound:
-                pass
-
     @commands.command()
     async def generate_staff_list(self, ctx):
         channel = ctx.channel
@@ -76,25 +68,22 @@ class StaffListCog(commands.Cog):
         # Send or edit the embed
         if self.staff_list_message_id:
             try:
-                staff_list_message = await channel.fetch_message(self.staff_list_message_id)
+                staff_list_channel = self.bot.get_channel(self.staff_list_channel_id)
+                staff_list_message = await staff_list_channel.fetch_message(self.staff_list_message_id)
                 await staff_list_message.edit(embed=embed)
-            except discord.NotFound:
+            except (discord.NotFound, discord.Forbidden):
                 staff_list_message = await channel.send(embed=embed)
+                self.staff_list_channel_id = staff_list_message.channel.id
                 self.staff_list_message_id = staff_list_message.id
         else:
             staff_list_message = await channel.send(embed=embed)
+            self.staff_list_channel_id = staff_list_message.channel.id
             self.staff_list_message_id = staff_list_message.id
 
     async def auto_update_staff_list(self):
         await self.bot.wait_until_ready()
         while not self.bot.is_closed():
-            for guild in self.bot.guilds:
-                for channel in guild.text_channels:
-                    try:
-                        staff_list_message = await channel.fetch_message(self.staff_list_message_id)
-                        await self.generate_staff_list(channel)
-                    except (discord.NotFound, discord.Forbidden):
-                        pass
+            await self.generate_staff_list()
             await asyncio.sleep(self.update_interval)
 
     def get_status_emoji(self, status):
