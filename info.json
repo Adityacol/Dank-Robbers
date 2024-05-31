@@ -1,0 +1,8 @@
+{
+    "author": ["aditya"],
+    "install_msg": "Thank you for installing this cog! If you encounter any issues or have any questions, feel free to reach out.",
+    "name": "TeamList",
+    "short": "A cog for automatically generating a staff list with user statuses.",
+    "description": "This cog is designed to automatically generate a staff list with user statuses based on roles. It fetches all users of specified roles and displays their online status in an embed message. The cog is tailored for Discord bots using the Red-DiscordBot framework.",
+    "tags": ["Discord", "Staff List", "Bot", "Embeds", "Red-DiscordBot"]
+}
