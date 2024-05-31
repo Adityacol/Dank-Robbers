@@ -9,10 +9,7 @@ class StaffListCog(commands.Cog):
         self.bot = bot
         self.data_file = 'team_config.json'
         self.staff_roles = self.load_staff_roles()
-        self.update_interval = 60  # Update interval in seconds (e.g., 600 seconds = 10 minutes)
-        self.channel_id = 1045701383430606879  # Replace CHANNEL_ID with the actual channel ID
-        self.staff_list_message_id = None  # Store the staff list message ID
-        self.generate_staff_list_task = self.bot.loop.create_task(self.auto_update_staff_list())
+        self.staff_list_message_id = None  # Store the message ID of the staff list message
 
     def load_staff_roles(self):
         if os.path.exists(self.data_file):
@@ -21,40 +18,80 @@ class StaffListCog(commands.Cog):
                 return data.get("roles", [])
         return []
 
-    async def generate_staff_list(self):
-        channel = self.bot.get_channel(self.channel_id)
-        if channel:
-            embed = discord.Embed(title="Our Staff", color=discord.Color.blue())
-            print("Loaded roles:", self.staff_roles)
-            for role_info in self.staff_roles:
-                role_id = role_info.get("id")
-                role_name = role_info.get("name")
-                print(f"Checking role '{role_name}' ({role_id})")
-                role = discord.utils.get(channel.guild.roles, id=role_id)
-                if role:
-                    print(f"Role '{role_name}' found.")
-                    members = role.members
-                    print(f"Members of role '{role_name}':", members)
-                    member_list = [member.display_name for member in members]
-                    if member_list:
-                        embed.add_field(name=role_name, value="\n".join(member_list), inline=False)
-                    else:
-                        embed.add_field(name=role_name, value="No members", inline=False)
+    def save_staff_roles(self):
+        with open(self.data_file, 'w') as file:
+            json.dump({"roles": self.staff_roles}, file, indent=4)
+
+    @commands.command()
+    async def add_role(self, ctx, role: discord.Role):
+        if role.id not in self.staff_roles:
+            self.staff_roles.append({"name": role.name, "id": role.id})
+            self.save_staff_roles()
+            await ctx.send(f"Role '{role.name}' added to the staff list.")
+            await self.update_staff_list(ctx)
+        else:
+            await ctx.send(f"Role '{role.name}' is already in the staff list.")
+
+    @commands.command()
+    async def remove_role(self, ctx, role: discord.Role):
+        role_id = role.id
+        for r in self.staff_roles:
+            if r["id"] == role_id:
+                self.staff_roles.remove(r)
+                self.save_staff_roles()
+                await ctx.send(f"Role '{role.name}' removed from the staff list.")
+                await self.update_staff_list(ctx)
+                return
+        await ctx.send(f"Role '{role.name}' is not in the staff list.")
+
+    async def update_staff_list(self, ctx):
+        await self.generate_staff_list(ctx)
+        if self.staff_list_message_id:
+            try:
+                staff_list_message = await ctx.channel.fetch_message(self.staff_list_message_id)
+                await staff_list_message.delete()
+            except discord.NotFound:
+                pass
+
+    @commands.command()
+    async def generate_staff_list(self, ctx):
+        channel = ctx.channel
+        embed = discord.Embed(title="Our Staff", color=discord.Color.blue())
+        for role_info in self.staff_roles:
+            role_id = role_info.get("id")
+            role_name = role_info.get("name")
+            role = ctx.guild.get_role(role_id)
+            if role:
+                members = role.members
+                member_status_list = [
+                    f"{member.mention}: {self.get_status_emoji(member.status)} {member.status}"
+                    for member in members
+                ]
+                if member_status_list:
+                    embed.add_field(name=role_name, value="\n".join(member_status_list), inline=False)
                 else:
-                    print(f"Role '{role_name}' not found in the server.")
-            print("Sending embed:", embed.to_dict())
-            if self.staff_list_message_id:
+                    embed.add_field(name=role_name, value="No members", inline=False)
+        
+        # Send or edit the embed
+        if self.staff_list_message_id:
+            try:
                 staff_list_message = await channel.fetch_message(self.staff_list_message_id)
                 await staff_list_message.edit(embed=embed)
-            else:
+            except discord.NotFound:
                 staff_list_message = await channel.send(embed=embed)
                 self.staff_list_message_id = staff_list_message.id
+        else:
+            staff_list_message = await channel.send(embed=embed)
+            self.staff_list_message_id = staff_list_message.id
 
-    async def auto_update_staff_list(self):
-        await self.bot.wait_until_ready()
-        while not self.bot.is_closed():
-            await self.generate_staff_list()
-            await asyncio.sleep(self.update_interval)
+    def get_status_emoji(self, status):
+        status_emojis = {
+            discord.Status.online: ":green_circle:",
+            discord.Status.offline: ":black_circle:",
+            discord.Status.idle: ":yellow_circle:",
+            discord.Status.dnd: ":red_circle:"
+        }
+        return status_emojis.get(status, ":white_circle:")
 
 def setup(bot):
     bot.add_cog(StaffListCog(bot))
