@@ -1,5 +1,6 @@
 import discord
 from redbot.core import commands
+from redbot.core.data_manager import cog_data_path
 import json
 import os
 import asyncio
@@ -7,15 +8,15 @@ import asyncio
 class StaffListCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.data_file = 'team_config.json'
+        self.data_file = cog_data_path(self) / 'team_config.json'
         self.staff_roles = self.load_staff_roles()
         self.staff_list_channel_id = None
         self.staff_list_message_id = None
-        self.update_interval = 300  # Update interval in seconds (e.g., 300 seconds = 5 minutes)
+        self.update_interval = 600  # Update interval in seconds (e.g., 600 seconds = 10 minutes)
         self.bot.loop.create_task(self.auto_update_staff_list())
 
     def load_staff_roles(self):
-        if os.path.exists(self.data_file):
+        if self.data_file.exists():
             with open(self.data_file, 'r') as file:
                 data = json.load(file)
                 return data.get("roles", [])
