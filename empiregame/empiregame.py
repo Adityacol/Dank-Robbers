@@ -6,6 +6,11 @@ from redbot.core import commands, app_commands
 from redbot.core.bot import Red
 from typing import Dict, List
 
+ROLE_ID = 899916792447766528
+
+def has_role(interaction: discord.Interaction):
+    return any(role.id == ROLE_ID for role in interaction.user.roles)
+
 class EmpireGame(commands.Cog):
     def __init__(self, bot: Red):
         self.bot = bot
@@ -22,6 +27,7 @@ class EmpireGame(commands.Cog):
         self.missed_turns = {}
 
     @app_commands.command(name="setup_empire_game")
+    @app_commands.check(has_role)
     async def setup_empire_game(self, interaction: discord.Interaction):
         """Sets up the Empire game with the rules and a join button."""
         if self.game_setup or self.game_started:
@@ -43,6 +49,7 @@ class EmpireGame(commands.Cog):
             color=discord.Color.purple()
         )
         embed.set_footer(text="Empire Game | Join now!")
+        embed.set_image(url="https://media.discordapp.net/attachments/1124416523910516736/1247270073987629067/image.png?ex=665f6a46&is=665e18c6&hm=3f7646ef6790d96e8c5b6f93bf45e1c57179fd809ef4d034ed1d330287d5ce7b&=&format=webp&quality=lossless&width=836&height=557")
 
         join_button = discord.ui.Button(label="Join", style=discord.ButtonStyle.success)
         join_button.callback = self.join_button_callback
