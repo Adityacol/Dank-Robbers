@@ -105,20 +105,19 @@ class EmpireGame(commands.Cog):
     async def update_join_embed(self, interaction: discord.Interaction):
         players_list = "\n\n".join([interaction.guild.get_member(pid).mention for pid in self.players])
         embed = discord.Embed(
-            title="Empire Game Setup",
+            title="Empires",
             description=(
-                "📝 **Game Rules**:\n"
-                "1️⃣ **Save Aliases**: Players save their aliases.\n"
-                "2️⃣ **Max Players**: Maximum 15 players can join.\n"
-                "3️⃣ **Start Game**: After saving aliases, the host can start the game.\n"
-                "4️⃣ **Guess Aliases**: Players guess the aliases turn by turn.\n"
-                "5️⃣ **Extra Turns**: Correct guesses earn additional turns.\n"
-                "6️⃣ **One Alias**: Each player can save their alias only once.\n\n"
-                f"**Players Joined ({len(self.players)}/15)**:\n{players_list}"
+                "Rules\n"
+                "・You can only save your alias once. No keyboard smashes allowed or making it break the rules.\n"
+                "・if you miss two turns you’ll be disqualified.\n"
+                "・Max is 15 players.\n\n"
+
+                f"Players Joined ({len(self.players)}/15):\n{players_list}"
             ),
-            color=discord.Color.purple()
+            color=discord.Color.white()
         )
         embed.set_footer(text="Empire Game | Join now!")
+        embed.set_image(url="https://media.discordapp.net/attachments/1124416523910516736/1247270073987629067/image.png?ex=665f6a46&is=665e18c6&hm=3f7646ef6790d96e8c5b6f93bf45e1c57179fd809ef4d034ed1d330287d5ce7b&=&format=webp&quality=lossless&width=836&height=557")
 
         await interaction.response.edit_message(embed=embed)
 
@@ -141,14 +140,13 @@ class EmpireGame(commands.Cog):
 
     async def explain_button_callback(self, interaction: discord.Interaction):
         rules = (
-            "📝 **Game Rules**:\n"
-            "1️⃣ **Save Aliases**: Players save their aliases.\n"
-            "2️⃣ **Max Players**: Maximum 15 players can join.\n"
-            "3️⃣ **Start Game**: After saving aliases, the host can start the game.\n"
-            "4️⃣ **Guess Aliases**: Players guess the aliases turn by turn.\n"
-            "5️⃣ **Extra Turns**: Correct guesses earn additional turns.\n"
-            "6️⃣ **One Alias**: Each player can save their alias only once.\n"
-            "7️⃣ **Elimination**: If a player doesn't guess an alias for 2 rounds, they will be eliminated."
+            "How to Play:\n"
+            "・You’ll have 60s to save your alias with /save alias\n"
+            "・When it’s your turn, guess an alias using /guess alias\n"
+            "・If correct, you get another guess.\n"
+            "・If incorrect, the next player will get a turn.\n"
+            "・Last one remaining wins.\n"
+
         )
         await interaction.response.send_message(rules, ephemeral=True)
 
