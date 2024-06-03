@@ -1,0 +1,9 @@
+{
+    "name": "EmpireGame",
+    "author": ["Your Name"],
+    "description": "A cog for playing an advanced game of Empire.",
+    "install_msg": "Thank you for installing EmpireGame! Use the /save_alias command to register an alias, /start_game to start the game, and /guess_alias to guess aliases.",
+    "short": "Empire Game Cog",
+    "requirements": [],
+    "tags": ["game", "empire", "fun"]
+}
