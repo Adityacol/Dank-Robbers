@@ -35,16 +35,14 @@ class EmpireGame(commands.Cog):
             return
         
         embed = discord.Embed(
-            title="Empires",
-            description=(
+            title="Empire Game Setup",
+           description=(
                 "Rules\n"
                 "・You can only save your alias once. No keyboard smashes allowed or making it break the rules.\n"
                 "・if you miss two turns you’ll be disqualified.\n"
                 "・Max is 15 players.\n\n"
-
-                f"Players Joined ({len(self.players)}/15):\n{players_list}"
             ),
-            color=discord.Color.white()
+            color=discord.Color.purple()
         )
         embed.set_footer(text="Empire Game | Join now!")
         embed.set_image(url="https://media.discordapp.net/attachments/1124416523910516736/1247270073987629067/image.png?ex=665f6a46&is=665e18c6&hm=3f7646ef6790d96e8c5b6f93bf45e1c57179fd809ef4d034ed1d330287d5ce7b&=&format=webp&quality=lossless&width=836&height=557")
