@@ -152,7 +152,7 @@ class EmpireGame(commands.Cog):
             "・When it’s your turn, guess an alias using /guess alias\n"
             "・If correct, you get another guess.\n"
             "・If incorrect, the next player will get a turn.\n"
-            "・Last one remaining wins.\n"
+            "・Last one remaining wins .\n"
 
         )
         await interaction.response.send_message(rules, ephemeral=True)
