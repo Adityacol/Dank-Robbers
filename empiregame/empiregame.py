@@ -95,7 +95,7 @@ class EmpireGame(commands.Cog):
         self.players[interaction.user.id] = None
         self.missed_turns[interaction.user.id] = 0
         member = interaction.guild.get_member(interaction.user.id)
-        self.original_permissions[interaction.user.id] = interaction.channel.permissions_for(member)
+        self.original_permissions[interaction.user.id] = interaction.channel.overwrites_for(member)
         await self.update_join_embed(interaction)
 
     async def leave_button_callback(self, interaction: discord.Interaction):
