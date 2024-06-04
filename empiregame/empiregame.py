@@ -1,8 +1,9 @@
 import discord
 import asyncio
 import random
-from discord.ext import tasks
-from redbot.core import commands, app_commands
+import re
+from discord.ext import commands
+from redbot.core import commands as red_commands, app_commands
 from redbot.core.bot import Red
 from typing import Dict, List
 
@@ -11,7 +12,14 @@ ROLE_ID = 899916792447766528
 def has_role(interaction: discord.Interaction):
     return any(role.id == ROLE_ID for role in interaction.user.roles)
 
-class EmpireGame(commands.Cog):
+def is_valid_alias(alias: str) -> bool:
+    if len(alias) < 3 or len(alias) > 15:
+        return False
+    if re.search(r'\b(?:fuck|shit|damn)\b', alias, re.IGNORECASE):
+        return False
+    return True
+
+class EmpireGame(red_commands.Cog):
     def __init__(self, bot: Red):
         self.bot = bot
         self.game_setup = False
@@ -40,7 +48,7 @@ class EmpireGame(commands.Cog):
             description=(
                 "Rules\n"
                 "・You can only save your alias once. No keyboard smashes allowed or making it break the rules.\n"
-                "・if you miss two turns you’ll be disqualified.\n"
+                "・If you miss two turns you’ll be disqualified.\n"
                 "・Max is 15 players.\n\n"
             ),
             color=discord.Color.purple()
@@ -117,7 +125,7 @@ class EmpireGame(commands.Cog):
             description=(
                 "Rules\n"
                 "・You can only save your alias once. No keyboard smashes allowed or making it break the rules.\n"
-                "・if you miss two turns you’ll be disqualified.\n"
+                "・If you miss two turns you’ll be disqualified.\n"
                 "・Max is 15 players.\n\n"
                 f"**Players Joined ({len(self.players)}/15)**:\n{players_list}"
             ),
@@ -126,7 +134,8 @@ class EmpireGame(commands.Cog):
         embed.set_footer(text="Empire Game | Join now!")
         embed.set_image(url="https://media.discordapp.net/attachments/1124416523910516736/1247270073987629067/image.png?ex=665f6a46&is=665e18c6&hm=3f7646ef6790d96e8c5b6f93bf45e1c57179fd809ef4d034ed1d330287d5ce7b&=&format=webp&quality=lossless&width=836&height=557")
 
-        await interaction.response.edit_message(embed=embed)
+        message = await interaction.original_response()
+        await message.edit(embed=embed)
 
     async def start_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.host:
@@ -152,8 +161,7 @@ class EmpireGame(commands.Cog):
             "・When it’s your turn, guess an alias using /guess alias\n"
             "・If correct, you get another guess.\n"
             "・If incorrect, the next player will get a turn.\n"
-            "・Last one remaining wins .\n"
-
+            "・Last one remaining wins.\n"
         )
         await interaction.response.send_message(rules, ephemeral=True)
 
@@ -210,6 +218,9 @@ class EmpireGame(commands.Cog):
         if alias in self.aliases.values():
             await interaction.response.send_message("❗ This alias has already been taken. Please choose another one.", ephemeral=True)
             return
+        if not is_valid_alias(alias):
+            await interaction.response.send_message("❗ This alias is invalid. Please choose another one.", ephemeral=True)
+            return
         self.players[interaction.user.id] = alias
         self.aliases[interaction.user.id] = alias
         await interaction.response.send_message("✅ Your alias has been saved.", ephemeral=True)
@@ -224,11 +235,9 @@ class EmpireGame(commands.Cog):
             await self.announce_winner(interaction)
             return
 
-        # Ensure current_turn points to a valid player
         self.current_turn = self.current_turn % len(self.turn_order)
         current_player = interaction.guild.get_member(self.turn_order[self.current_turn])
 
-        # Create a table-like structure for the embed
         shuffled_aliases = random.sample(list(self.aliases.values()), len(self.aliases))
         players_aliases = list(zip([interaction.guild.get_member(pid).mention for pid in self.players], shuffled_aliases))
         players_field = "\n\n".join([player for player, _ in players_aliases])
@@ -240,8 +249,6 @@ class EmpireGame(commands.Cog):
         )
         embed.add_field(name="Players", value=players_field, inline=True)
         embed.add_field(name="Aliases", value=aliases_field, inline=True)
-        
-        # Add more spacing to make the embed more spacious
         embed.add_field(name="\u200b", value="\u200b", inline=False)
         await interaction.channel.send(content=current_player.mention, embed=embed)
 
@@ -293,8 +300,7 @@ class EmpireGame(commands.Cog):
             await interaction.response.send_message("❗ You cannot guess your own alias.", ephemeral=True)
             return
 
-        self.missed_turns[interaction.user.id] = 0  # Reset missed turns on successful guess
-        await interaction.channel.set_permissions(interaction.user, send_messages=True)  # Restore permissions
+        self.missed_turns[interaction.user.id] = 0
 
         if self.aliases.get(member.id) == guessed_alias:
             await interaction.response.send_message(f"🎉 Correct guess! {member.mention} was eliminated.")
@@ -306,7 +312,6 @@ class EmpireGame(commands.Cog):
             if len(self.players) < 2:
                 await self.announce_winner(interaction)
                 return
-            # Grant an extra turn
             await self.start_guessing(interaction)
         else:
             await interaction.response.send_message(f"❌ Wrong guess. It's now the next player's turn.")
@@ -348,7 +353,6 @@ class EmpireGame(commands.Cog):
             self.join_task.cancel()
         self.join_task = None
         self.missed_turns = {}
-        # Restore original permissions
         for player_id, permissions in self.original_permissions.items():
             member = self.bot.get_guild(self.joining_channel.guild.id).get_member(player_id)
             if member:
