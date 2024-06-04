@@ -96,6 +96,8 @@ class EmpireGame(commands.Cog):
         self.missed_turns[interaction.user.id] = 0
         member = interaction.guild.get_member(interaction.user.id)
         self.original_permissions[interaction.user.id] = interaction.channel.overwrites_for(member)
+        # Allow the player to send messages in the channel
+        await interaction.channel.set_permissions(member, send_messages=True)
         await self.update_join_embed(interaction)
 
     async def leave_button_callback(self, interaction: discord.Interaction):
@@ -105,6 +107,8 @@ class EmpireGame(commands.Cog):
         if interaction.user.id not in self.players:
             await interaction.response.send_message("❗ You are not part of the game.", ephemeral=True)
             return
+        member = interaction.guild.get_member(interaction.user.id)
+        await interaction.channel.set_permissions(member, overwrite=self.original_permissions.get(interaction.user.id))
         self.players.pop(interaction.user.id)
         self.missed_turns.pop(interaction.user.id)
         self.original_permissions.pop(interaction.user.id, None)
@@ -223,7 +227,14 @@ class EmpireGame(commands.Cog):
             return
 
         self.current_turn = self.current_turn % len(self.turn_order)
-        current_player = interaction.guild.get_member(self.turn_order[self.current_turn])
+        current_player_id = self.turn_order[self.current_turn]
+        current_player = interaction.guild.get_member(current_player_id)
+
+        # Skip turn if player hasn't saved their alias
+        while self.players[current_player_id] is None:
+            self.advance_turn()
+            current_player_id = self.turn_order[self.current_turn]
+            current_player = interaction.guild.get_member(current_player_id)
 
         shuffled_aliases = random.sample(list(self.aliases.values()), len(self.aliases))
         players_aliases = list(zip([interaction.guild.get_member(pid).mention for pid in self.players], shuffled_aliases))
