@@ -34,6 +34,7 @@ class EmpireGame(red_commands.Cog):
         self.join_task = None
         self.missed_turns = {}
         self.original_permissions = {}
+        self.setup_message = None  # Track the setup message
 
     @app_commands.command(name="setup_empire_game")
     @app_commands.check(has_role)
@@ -78,7 +79,8 @@ class EmpireGame(red_commands.Cog):
         view.add_item(cancel_button)
         view.add_item(explain_button)
 
-        await interaction.response.send_message(embed=embed, view=view)
+        message = await interaction.response.send_message(embed=embed, view=view)
+        self.setup_message = await message.original_response()
         self.joining_channel = interaction.channel
         self.players = {}
         self.aliases = {}
@@ -104,7 +106,7 @@ class EmpireGame(red_commands.Cog):
         self.missed_turns[interaction.user.id] = 0
         member = interaction.guild.get_member(interaction.user.id)
         self.original_permissions[interaction.user.id] = member.permissions_in(interaction.channel)
-        await self.update_join_embed(interaction)
+        await self.update_join_embed()
 
     async def leave_button_callback(self, interaction: discord.Interaction):
         if not self.game_setup:
@@ -116,10 +118,10 @@ class EmpireGame(red_commands.Cog):
         self.players.pop(interaction.user.id)
         self.missed_turns.pop(interaction.user.id)
         self.original_permissions.pop(interaction.user.id, None)
-        await self.update_join_embed(interaction)
+        await self.update_join_embed()
 
-    async def update_join_embed(self, interaction: discord.Interaction):
-        players_list = "\n\n".join([interaction.guild.get_member(pid).mention for pid in self.players])
+    async def update_join_embed(self):
+        players_list = "\n\n".join([self.joining_channel.guild.get_member(pid).mention for pid in self.players])
         embed = discord.Embed(
             title="Empire Game Setup",
             description=(
@@ -134,8 +136,7 @@ class EmpireGame(red_commands.Cog):
         embed.set_footer(text="Empire Game | Join now!")
         embed.set_image(url="https://media.discordapp.net/attachments/1124416523910516736/1247270073987629067/image.png?ex=665f6a46&is=665e18c6&hm=3f7646ef6790d96e8c5b6f93bf45e1c57179fd809ef4d034ed1d330287d5ce7b&=&format=webp&quality=lossless&width=836&height=557")
 
-        message = await interaction.original_response()
-        await message.edit(embed=embed)
+        await self.setup_message.edit(embed=embed)
 
     async def start_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.host:
@@ -358,6 +359,7 @@ class EmpireGame(red_commands.Cog):
             if member:
                 self.joining_channel.set_permissions(member, overwrite=permissions)
         self.original_permissions = {}
+        self.setup_message = None
 
     @commands.Cog.listener()
     async def on_ready(self):
