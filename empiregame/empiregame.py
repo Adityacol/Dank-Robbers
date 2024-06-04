@@ -25,8 +25,6 @@ class EmpireGame(commands.Cog):
         self.turn_timer = None
         self.join_task = None
         self.missed_turns = {}
-        self.original_permissions = {}
-        self.setup_message = None
 
     @app_commands.command(name="setup_empire_game")
     @app_commands.check(has_role)
@@ -39,9 +37,9 @@ class EmpireGame(commands.Cog):
         embed = discord.Embed(
             title="Empire Game Setup",
             description=(
-                "Rules\n"
+                 "Rules\n"
                 "・You can only save your alias once. No keyboard smashes allowed or making it break the rules.\n"
-                "・If you miss two turns you’ll be disqualified.\n"
+                "・if you miss two turns you’ll be disqualified.\n"
                 "・Max is 15 players.\n\n"
             ),
             color=discord.Color.purple()
@@ -71,8 +69,7 @@ class EmpireGame(commands.Cog):
         view.add_item(cancel_button)
         view.add_item(explain_button)
 
-        message = await interaction.response.send_message(embed=embed, view=view)
-        self.setup_message = await message.original_response()
+        await interaction.response.send_message(embed=embed, view=view)
         self.joining_channel = interaction.channel
         self.players = {}
         self.aliases = {}
@@ -82,62 +79,49 @@ class EmpireGame(commands.Cog):
         self.game_started = False
         self.host = interaction.user.id
         self.missed_turns = {}
-        self.original_permissions = {}
 
     async def join_button_callback(self, interaction: discord.Interaction):
-        try:
-            if not self.game_setup:
-                await interaction.response.send_message("❗ The game is not currently being set up.", ephemeral=True)
-                return
-            if len(self.players) >= 15:
-                await interaction.response.send_message("❗ The game already has the maximum number of players.", ephemeral=True)
-                return
-            if interaction.user.id in self.players:
-                await interaction.response.send_message("❗ You have already joined the game.", ephemeral=True)
-                return
-            self.players[interaction.user.id] = None
-            self.missed_turns[interaction.user.id] = 0
-            member = interaction.guild.get_member(interaction.user.id)
-            self.original_permissions[interaction.user.id] = interaction.channel.permissions_for(member)
-            await self.update_join_embed()
-        except Exception as e:
-            print(f"Error in join_button_callback: {e}")
+        if not self.game_setup:
+            await interaction.response.send_message("❗ The game is not currently being set up.", ephemeral=True)
+            return
+        if len(self.players) >= 15:
+            await interaction.response.send_message("❗ The game already has the maximum number of players.", ephemeral=True)
+            return
+        if interaction.user.id in self.players:
+            await interaction.response.send_message("❗ You have already joined the game.", ephemeral=True)
+            return
+        self.players[interaction.user.id] = None
+        self.missed_turns[interaction.user.id] = 0
+        await self.update_join_embed(interaction)
 
     async def leave_button_callback(self, interaction: discord.Interaction):
-        try:
-            if not self.game_setup:
-                await interaction.response.send_message("❗ The game is not currently being set up.", ephemeral=True)
-                return
-            if interaction.user.id not in self.players:
-                await interaction.response.send_message("❗ You are not part of the game.", ephemeral=True)
-                return
-            self.players.pop(interaction.user.id)
-            self.missed_turns.pop(interaction.user.id)
-            self.original_permissions.pop(interaction.user.id, None)
-            await self.update_join_embed()
-        except Exception as e:
-            print(f"Error in leave_button_callback: {e}")
+        if not self.game_setup:
+            await interaction.response.send_message("❗ The game is not currently being set up.", ephemeral=True)
+            return
+        if interaction.user.id not in self.players:
+            await interaction.response.send_message("❗ You are not part of the game.", ephemeral=True)
+            return
+        self.players.pop(interaction.user.id)
+        self.missed_turns.pop(interaction.user.id)
+        await self.update_join_embed(interaction)
 
-    async def update_join_embed(self):
-        try:
-            players_list = "\n\n".join([self.joining_channel.guild.get_member(pid).mention for pid in self.players])
-            embed = discord.Embed(
-                title="Empire Game Setup",
-                description=(
-                    "Rules\n"
-                    "・You can only save your alias once. No keyboard smashes allowed or making it break the rules.\n"
-                    "・If you miss two turns you’ll be disqualified.\n"
-                    "・Max is 15 players.\n\n"
-                    f"Players Joined ({len(self.players)}/15):\n{players_list}"
-                ),
-                color=discord.Color.purple()
-            )
-            embed.set_footer(text="Empire Game | Join now!")
-            embed.set_image(url="https://media.discordapp.net/attachments/1124416523910516736/1247270073987629067/image.png?ex=665f6a46&is=665e18c6&hm=3f7646ef6790d96e8c5b6f93bf45e1c57179fd809ef4d034ed1d330287d5ce7b&=&format=webp&quality=lossless&width=836&height=557")
+    async def update_join_embed(self, interaction: discord.Interaction):
+        players_list = "\n\n".join([interaction.guild.get_member(pid).mention for pid in self.players])
+        embed = discord.Embed(
+            title="Empire Game Setup",
+            description=(
+                 "Rules\n"
+                "・You can only save your alias once. No keyboard smashes allowed or making it break the rules.\n"
+                "・if you miss two turns you’ll be disqualified.\n"
+                "・Max is 15 players.\n\n"
+                f"**Players Joined ({len(self.players)}/15)**:\n{players_list}"
+            ),
+            color=discord.Color.purple()
+        )
+        embed.set_footer(text="Empire Game | Join now!")
+        embed.set_image(url="https://media.discordapp.net/attachments/1124416523910516736/1247270073987629067/image.png?ex=665f6a46&is=665e18c6&hm=3f7646ef6790d96e8c5b6f93bf45e1c57179fd809ef4d034ed1d330287d5ce7b&=&format=webp&quality=lossless&width=836&height=557")
 
-            await self.setup_message.edit(embed=embed)
-        except Exception as e:
-            print(f"Error in update_join_embed: {e}")
+        await interaction.response.edit_message(embed=embed)
 
     async def start_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.host:
@@ -192,7 +176,6 @@ class EmpireGame(commands.Cog):
                 eliminated_players.append(member.mention)
                 self.players.pop(player_id)
                 self.missed_turns.pop(player_id)
-                self.original_permissions.pop(player_id, None)
                 await interaction.channel.set_permissions(member, send_messages=False)
         
         if eliminated_players:
@@ -234,9 +217,11 @@ class EmpireGame(commands.Cog):
             await self.announce_winner(interaction)
             return
 
+        # Ensure current_turn points to a valid player
         self.current_turn = self.current_turn % len(self.turn_order)
         current_player = interaction.guild.get_member(self.turn_order[self.current_turn])
 
+        # Create a table-like structure for the embed
         shuffled_aliases = random.sample(list(self.aliases.values()), len(self.aliases))
         players_aliases = list(zip([interaction.guild.get_member(pid).mention for pid in self.players], shuffled_aliases))
         players_field = "\n\n".join([player for player, _ in players_aliases])
@@ -248,6 +233,8 @@ class EmpireGame(commands.Cog):
         )
         embed.add_field(name="Players", value=players_field, inline=True)
         embed.add_field(name="Aliases", value=aliases_field, inline=True)
+        
+        # Add more spacing to make the embed more spacious
         embed.add_field(name="\u200b", value="\u200b", inline=False)
         await interaction.channel.send(content=current_player.mention, embed=embed)
 
@@ -264,16 +251,12 @@ class EmpireGame(commands.Cog):
         current_player = interaction.guild.get_member(current_player_id)
         self.missed_turns[current_player_id] += 1
 
-        if self.missed_turns[current_player_id] == 1:
-            await interaction.channel.send(f"❗ {current_player.mention} took too long to guess and has been muted. They will be eliminated if they miss another turn.")
-            await interaction.channel.set_permissions(current_player, send_messages=False)
-        elif self.missed_turns[current_player_id] >= 2:
+        if self.missed_turns[current_player_id] >= 2:
             await interaction.channel.send(f"❗ {current_player.mention} didn't guess an alias for 2 rounds and was eliminated.")
             self.players.pop(current_player_id)
             self.aliases.pop(current_player_id)
             self.turn_order.remove(current_player_id)
-            self.missed_turns.pop(current_player_id)
-            self.original_permissions.pop(current_player_id, None)
+            await interaction.channel.set_permissions(current_player, send_messages=False)
 
             if len(self.players) < 2:
                 await self.announce_winner(interaction)
@@ -299,18 +282,18 @@ class EmpireGame(commands.Cog):
             await interaction.response.send_message("❗ You cannot guess your own alias.", ephemeral=True)
             return
 
-        self.missed_turns[interaction.user.id] = 0
+        self.missed_turns[interaction.user.id] = 0  # Reset missed turns on successful guess
 
         if self.aliases.get(member.id) == guessed_alias:
             await interaction.response.send_message(f"🎉 Correct guess! {member.mention} was eliminated.")
             self.players.pop(member.id)
             self.aliases.pop(member.id)
             self.turn_order.remove(member.id)
-            self.missed_turns.pop(member.id)
-            self.original_permissions.pop(member.id, None)
+            await interaction.channel.set_permissions(member, send_messages=False)
             if len(self.players) < 2:
                 await self.announce_winner(interaction)
                 return
+            # Grant an extra turn
             await self.start_guessing(interaction)
         else:
             await interaction.response.send_message(f"❌ Wrong guess. It's now the next player's turn.")
@@ -352,11 +335,6 @@ class EmpireGame(commands.Cog):
             self.join_task.cancel()
         self.join_task = None
         self.missed_turns = {}
-        for player_id, permissions in self.original_permissions.items():
-            member = self.bot.get_guild(self.joining_channel.guild.id).get_member(player_id)
-            if member:
-                self.joining_channel.set_permissions(member, overwrite=permissions)
-        self.original_permissions = {}
 
     @commands.Cog.listener()
     async def on_ready(self):
