@@ -38,14 +38,10 @@ class EmpireGame(commands.Cog):
         embed = discord.Embed(
             title="Empire Game Setup",
             description=(
-                "📝 **Game Rules**:\n"
-                "1️⃣ **Save Aliases**: Players save their aliases.\n"
-                "2️⃣ **Max Players**: Maximum 15 players can join.\n"
-                "3️⃣ **Start Game**: After saving aliases, the host can start the game.\n"
-                "4️⃣ **Guess Aliases**: Players guess the aliases turn by turn.\n"
-                "5️⃣ **Extra Turns**: Correct guesses earn additional turns.\n"
-                "6️⃣ **One Alias**: Each player can save their alias only once.\n"
-                "7️⃣ **Elimination**: If a player doesn't guess an alias for 2 rounds, they will be eliminated."
+                "Rules\n"
+                "・You can only save your alias once. No keyboard smashes allowed or making it break the rules.\n"
+                "・if you miss two turns you’ll be disqualified.\n"
+                "・Max is 15 players.\n\n"
             ),
             color=discord.Color.purple()
         )
@@ -119,13 +115,10 @@ class EmpireGame(commands.Cog):
         embed = discord.Embed(
             title="Empire Game Setup",
             description=(
-                "📝 **Game Rules**:\n"
-                "1️⃣ **Save Aliases**: Players save their aliases.\n"
-                "2️⃣ **Max Players**: Maximum 15 players can join.\n"
-                "3️⃣ **Start Game**: After saving aliases, the host can start the game.\n"
-                "4️⃣ **Guess Aliases**: Players guess the aliases turn by turn.\n"
-                "5️⃣ **Extra Turns**: Correct guesses earn additional turns.\n"
-                "6️⃣ **One Alias**: Each player can save their alias only once.\n\n"
+                "Rules\n"
+                "・You can only save your alias once. No keyboard smashes allowed or making it break the rules.\n"
+                "・if you miss two turns you’ll be disqualified.\n"
+                "・Max is 15 players.\n\n"
                 f"**Players Joined ({len(self.players)}/15)**:\n{players_list}"
             ),
             color=discord.Color.purple()
