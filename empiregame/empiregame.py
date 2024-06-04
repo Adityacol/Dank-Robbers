@@ -13,6 +13,8 @@ class EmpireGame(commands.Cog):
         self.setup_done = False
         self.participants = {}
         self.initial_permissions = {}
+        self.turns = {}
+        self.failed_turns = {}
 
     async def join_game(self, interaction: discord.Interaction):
         if len(self.participants) >= 10:
@@ -26,6 +28,7 @@ class EmpireGame(commands.Cog):
         self.initial_permissions[interaction.user] = interaction.user.guild_permissions
 
         self.participants[interaction.user] = None
+        self.failed_turns[interaction.user] = 0
         await interaction.response.send_message(f"{interaction.user.mention} has joined the game.", ephemeral=True)
 
     @app_commands.command(name="setup_empire_game", description="Setup the Empire game with rules")
@@ -60,19 +63,26 @@ class EmpireGame(commands.Cog):
             return
 
         self.game_active = True
-        participant_mentions = ', '.join([member.mention for member in self.participants.keys()])
-        await interaction.response.send_message(f"The game has started! Participants: {participant_mentions}")
+        self.turns = list(self.participants.keys())
+        random.shuffle(self.turns)
+        await self.start_turn()
 
-        aliases_list = list(self.participants.values())
-        random.shuffle(aliases_list)
-        self.aliases_randomized = aliases_list
+    async def start_turn(self):
+        if self.turns:
+            current_user = self.turns[0]
+            await self.bot.get_channel(current_user.dm_channel.id).send(f"{current_user.mention}, it's your turn to guess!")
 
-        embed = discord.Embed(
-            title="Empire Game Started",
-            description="\n".join([f"{member.mention}: {alias}" for member, alias in zip(self.participants.keys(), self.aliases_randomized)]),
-            color=discord.Color.green()
-        )
-        await interaction.followup.send(embed=embed)
+    async def next_turn(self):
+        if self.turns:
+            current_user = self.turns.pop(0)
+            if self.failed_turns[current_user] == 0:
+                self.failed_turns[current_user] += 1
+                self.turns.append(current_user)
+            else:
+                await current_user.edit(mute=True)
+                del self.participants[current_user]
+                del self.failed_turns[current_user]
+            await self.start_turn()
 
     @app_commands.command(name="save_alias", description="Save your alias for the Empire game")
     @app_commands.describe(alias="Your alias")
@@ -96,10 +106,15 @@ class EmpireGame(commands.Cog):
         if member not in self.participants:
             await interaction.response.send_message("This member is not a participant in the game.", ephemeral=True)
             return
+        if interaction.user != self.turns[0]:
+            await interaction.response.send_message("It's not your turn.", ephemeral=True)
+            return
+
         if self.participants[member] == alias:
             await interaction.response.send_message(f"Correct! {member.name}'s alias is {alias}. You get another turn.", ephemeral=True)
         else:
             await interaction.response.send_message(f"Incorrect guess. {member.name}'s alias is not {alias}.", ephemeral=True)
+            await self.next_turn()
 
     @app_commands.command(name="end_empire_game", description="End the Empire game and reset permissions")
     async def end_empire_game(self, interaction: discord.Interaction):
@@ -109,13 +124,16 @@ class EmpireGame(commands.Cog):
 
         self.game_active = False
         self.setup_done = False
-        self.participants.clear()
 
         # Reset permissions for all participants
         for user, permissions in self.initial_permissions.items():
-            await user.edit(permissions=permissions)
-        
+            await user.edit(mute=False)
+
+        self.participants.clear()
         self.initial_permissions.clear()
+        self.turns.clear()
+        self.failed_turns.clear()
+
         await interaction.response.send_message("The Empire game has ended. All permissions have been reset.", ephemeral=True)
 
     @commands.Cog.listener()
