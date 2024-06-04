@@ -40,57 +40,60 @@ class EmpireGame(red_commands.Cog):
     @app_commands.check(has_role)
     async def setup_empire_game(self, interaction: discord.Interaction):
         """Sets up the Empire game with the rules and a join button."""
-        if self.game_setup or self.game_started:
-            await interaction.response.send_message("❗ A game is already in progress or setup.", ephemeral=True)
-            return
-        
-        embed = discord.Embed(
-            title="Empire Game Setup",
-            description=(
-                "Rules\n"
-                "・You can only save your alias once. No keyboard smashes allowed or making it break the rules.\n"
-                "・If you miss two turns you’ll be disqualified.\n"
-                "・Max is 15 players.\n\n"
-            ),
-            color=discord.Color.purple()
-        )
-        embed.set_footer(text="Empire Game | Join now!")
-        embed.set_image(url="https://media.discordapp.net/attachments/1124416523910516736/1247270073987629067/image.png?ex=665f6a46&is=665e18c6&hm=3f7646ef6790d96e8c5b6f93bf45e1c57179fd809ef4d034ed1d330287d5ce7b&=&format=webp&quality=lossless&width=836&height=557")
+        try:
+            if self.game_setup or self.game_started:
+                await interaction.response.send_message("❗ A game is already in progress or setup.", ephemeral=True)
+                return
 
-        join_button = discord.ui.Button(label="Join", style=discord.ButtonStyle.success)
-        join_button.callback = self.join_button_callback
+            embed = discord.Embed(
+                title="Empire Game Setup",
+                description=(
+                    "Rules\n"
+                    "・You can only save your alias once. No keyboard smashes allowed or making it break the rules.\n"
+                    "・If you miss two turns you’ll be disqualified.\n"
+                    "・Max is 15 players.\n\n"
+                ),
+                color=discord.Color.purple()
+            )
+            embed.set_footer(text="Empire Game | Join now!")
+            embed.set_image(url="https://media.discordapp.net/attachments/1124416523910516736/1247270073987629067/image.png?ex=665f6a46&is=665e18c6&hm=3f7646ef6790d96e8c5b6f93bf45e1c57179fd809ef4d034ed1d330287d5ce7b&=&format=webp&quality=lossless&width=836&height=557")
 
-        leave_button = discord.ui.Button(label="Leave", style=discord.ButtonStyle.danger)
-        leave_button.callback = self.leave_button_callback
+            join_button = discord.ui.Button(label="Join", style=discord.ButtonStyle.success)
+            join_button.callback = self.join_button_callback
 
-        start_button = discord.ui.Button(label="Start Game", style=discord.ButtonStyle.primary)
-        start_button.callback = self.start_button_callback
+            leave_button = discord.ui.Button(label="Leave", style=discord.ButtonStyle.danger)
+            leave_button.callback = self.leave_button_callback
 
-        cancel_button = discord.ui.Button(label="Cancel Game", style=discord.ButtonStyle.danger)
-        cancel_button.callback = self.cancel_button_callback
+            start_button = discord.ui.Button(label="Start Game", style=discord.ButtonStyle.primary)
+            start_button.callback = self.start_button_callback
 
-        explain_button = discord.ui.Button(label="Explain", style=discord.ButtonStyle.secondary)
-        explain_button.callback = self.explain_button_callback
+            cancel_button = discord.ui.Button(label="Cancel Game", style=discord.ButtonStyle.danger)
+            cancel_button.callback = self.cancel_button_callback
 
-        view = discord.ui.View()
-        view.add_item(join_button)
-        view.add_item(leave_button)
-        view.add_item(start_button)
-        view.add_item(cancel_button)
-        view.add_item(explain_button)
+            explain_button = discord.ui.Button(label="Explain", style=discord.ButtonStyle.secondary)
+            explain_button.callback = self.explain_button_callback
 
-        message = await interaction.response.send_message(embed=embed, view=view)
-        self.setup_message = await message.original_response()
-        self.joining_channel = interaction.channel
-        self.players = {}
-        self.aliases = {}
-        self.turn_order = []
-        self.current_turn = 0
-        self.game_setup = True
-        self.game_started = False
-        self.host = interaction.user.id
-        self.missed_turns = {}
-        self.original_permissions = {}
+            view = discord.ui.View()
+            view.add_item(join_button)
+            view.add_item(leave_button)
+            view.add_item(start_button)
+            view.add_item(cancel_button)
+            view.add_item(explain_button)
+
+            await interaction.response.send_message(embed=embed, view=view)
+            self.setup_message = await interaction.original_response()
+            self.joining_channel = interaction.channel
+            self.players = {}
+            self.aliases = {}
+            self.turn_order = []
+            self.current_turn = 0
+            self.game_setup = True
+            self.game_started = False
+            self.host = interaction.user.id
+            self.missed_turns = {}
+            self.original_permissions = {}
+        except Exception as e:
+            print(f"Error in command 'setup_empire_game': {e}")
 
     async def join_button_callback(self, interaction: discord.Interaction):
         if not self.game_setup:
@@ -136,7 +139,10 @@ class EmpireGame(red_commands.Cog):
         embed.set_footer(text="Empire Game | Join now!")
         embed.set_image(url="https://media.discordapp.net/attachments/1124416523910516736/1247270073987629067/image.png?ex=665f6a46&is=665e18c6&hm=3f7646ef6790d96e8c5b6f93bf45e1c57179fd809ef4d034ed1d330287d5ce7b&=&format=webp&quality=lossless&width=836&height=557")
 
-        await self.setup_message.edit(embed=embed)
+        if self.setup_message:
+            await self.setup_message.edit(embed=embed)
+        else:
+            print("Setup message is not available for editing.")
 
     async def start_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.host:
