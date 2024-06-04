@@ -40,9 +40,8 @@ class EmpireGame(commands.Cog):
             description=(
                 "Rules\n"
                 "・You can only save your alias once. No keyboard smashes allowed or making it break the rules.\n"
-                "・if you miss two turns you’ll be disqualified.\n"
+                "・If you miss two turns you’ll be disqualified.\n"
                 "・Max is 15 players.\n\n"
-
             ),
             color=discord.Color.purple()
         )
@@ -96,7 +95,7 @@ class EmpireGame(commands.Cog):
         self.players[interaction.user.id] = None
         self.missed_turns[interaction.user.id] = 0
         member = interaction.guild.get_member(interaction.user.id)
-        self.original_permissions[interaction.user.id] = member.permissions_in(interaction.channel)
+        self.original_permissions[interaction.user.id] = interaction.channel.permissions_for(member)
         await self.update_join_embed(interaction)
 
     async def leave_button_callback(self, interaction: discord.Interaction):
@@ -118,9 +117,8 @@ class EmpireGame(commands.Cog):
             description=(
                 "Rules\n"
                 "・You can only save your alias once. No keyboard smashes allowed or making it break the rules.\n"
-                "・if you miss two turns you’ll be disqualified.\n"
+                "・If you miss two turns you’ll be disqualified.\n"
                 "・Max is 15 players.\n\n"
-
                 f"Players Joined ({len(self.players)}/15):\n{players_list}"
             ),
             color=discord.Color.purple()
@@ -128,7 +126,7 @@ class EmpireGame(commands.Cog):
         embed.set_footer(text="Empire Game | Join now!")
         embed.set_image(url="https://media.discordapp.net/attachments/1124416523910516736/1247270073987629067/image.png?ex=665f6a46&is=665e18c6&hm=3f7646ef6790d96e8c5b6f93bf45e1c57179fd809ef4d034ed1d330287d5ce7b&=&format=webp&quality=lossless&width=836&height=557")
 
-        await interaction.response.edit_message(embed=embed)
+        await interaction.edit_original_response(embed=embed)
 
     async def start_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.host:
@@ -373,4 +371,3 @@ async def setup(bot: Red):
             bot.tree.add_command(cog.guess_alias)
         except discord.app_commands.CommandAlreadyRegistered:
             pass
-
