@@ -25,6 +25,7 @@ class EmpireGame(commands.Cog):
         self.turn_timer = None
         self.join_task = None
         self.missed_turns = {}
+        self.original_permissions = {}
 
     @app_commands.command(name="setup_empire_game")
     @app_commands.check(has_role)
@@ -83,6 +84,7 @@ class EmpireGame(commands.Cog):
         self.game_started = False
         self.host = interaction.user.id
         self.missed_turns = {}
+        self.original_permissions = {}
 
     async def join_button_callback(self, interaction: discord.Interaction):
         if not self.game_setup:
@@ -96,6 +98,8 @@ class EmpireGame(commands.Cog):
             return
         self.players[interaction.user.id] = None
         self.missed_turns[interaction.user.id] = 0
+        member = interaction.guild.get_member(interaction.user.id)
+        self.original_permissions[interaction.user.id] = member.permissions_in(interaction.channel)
         await self.update_join_embed(interaction)
 
     async def leave_button_callback(self, interaction: discord.Interaction):
@@ -107,19 +111,22 @@ class EmpireGame(commands.Cog):
             return
         self.players.pop(interaction.user.id)
         self.missed_turns.pop(interaction.user.id)
+        self.original_permissions.pop(interaction.user.id, None)
         await self.update_join_embed(interaction)
 
     async def update_join_embed(self, interaction: discord.Interaction):
         players_list = "\n\n".join([interaction.guild.get_member(pid).mention for pid in self.players])
         embed = discord.Embed(
             title="Empire Game Setup",
-             description=(
-                "Rules\n"
-                "・You can only save your alias once. No keyboard smashes allowed or making it break the rules.\n"
-                "・if you miss two turns you’ll be disqualified.\n"
-                "・Max is 15 players.\n\n"
-
-                f"Players Joined ({len(self.players)}/15):\n{players_list}"
+            description=(
+                "📝 **Game Rules**:\n"
+                "1️⃣ **Save Aliases**: Players save their aliases.\n"
+                "2️⃣ **Max Players**: Maximum 15 players can join.\n"
+                "3️⃣ **Start Game**: After saving aliases, the host can start the game.\n"
+                "4️⃣ **Guess Aliases**: Players guess the aliases turn by turn.\n"
+                "5️⃣ **Extra Turns**: Correct guesses earn additional turns.\n"
+                "6️⃣ **One Alias**: Each player can save their alias only once.\n\n"
+                f"**Players Joined ({len(self.players)}/15)**:\n{players_list}"
             ),
             color=discord.Color.purple()
         )
@@ -182,6 +189,7 @@ class EmpireGame(commands.Cog):
                 eliminated_players.append(member.mention)
                 self.players.pop(player_id)
                 self.missed_turns.pop(player_id)
+                self.original_permissions.pop(player_id, None)
                 await interaction.channel.set_permissions(member, send_messages=False)
         
         if eliminated_players:
@@ -257,12 +265,16 @@ class EmpireGame(commands.Cog):
         current_player = interaction.guild.get_member(current_player_id)
         self.missed_turns[current_player_id] += 1
 
-        if self.missed_turns[current_player_id] >= 2:
+        if self.missed_turns[current_player_id] == 1:
+            await interaction.channel.send(f"❗ {current_player.mention} took too long to guess and has been muted. They will be eliminated if they miss another turn.")
+            await interaction.channel.set_permissions(current_player, send_messages=False)
+        elif self.missed_turns[current_player_id] >= 2:
             await interaction.channel.send(f"❗ {current_player.mention} didn't guess an alias for 2 rounds and was eliminated.")
             self.players.pop(current_player_id)
             self.aliases.pop(current_player_id)
             self.turn_order.remove(current_player_id)
-            await interaction.channel.set_permissions(current_player, send_messages=False)
+            self.missed_turns.pop(current_player_id)
+            self.original_permissions.pop(current_player_id, None)
 
             if len(self.players) < 2:
                 await self.announce_winner(interaction)
@@ -289,13 +301,15 @@ class EmpireGame(commands.Cog):
             return
 
         self.missed_turns[interaction.user.id] = 0  # Reset missed turns on successful guess
+        await interaction.channel.set_permissions(interaction.user, send_messages=True)  # Restore permissions
 
         if self.aliases.get(member.id) == guessed_alias:
             await interaction.response.send_message(f"🎉 Correct guess! {member.mention} was eliminated.")
             self.players.pop(member.id)
             self.aliases.pop(member.id)
             self.turn_order.remove(member.id)
-            await interaction.channel.set_permissions(member, send_messages=False)
+            self.missed_turns.pop(member.id)
+            self.original_permissions.pop(member.id, None)
             if len(self.players) < 2:
                 await self.announce_winner(interaction)
                 return
@@ -341,6 +355,12 @@ class EmpireGame(commands.Cog):
             self.join_task.cancel()
         self.join_task = None
         self.missed_turns = {}
+        # Restore original permissions
+        for player_id, permissions in self.original_permissions.items():
+            member = self.bot.get_guild(self.joining_channel.guild.id).get_member(player_id)
+            if member:
+                self.joining_channel.set_permissions(member, overwrite=permissions)
+        self.original_permissions = {}
 
     @commands.Cog.listener()
     async def on_ready(self):
