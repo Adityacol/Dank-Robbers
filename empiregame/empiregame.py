@@ -1,8 +1,8 @@
 import discord
 import asyncio
 import random
-from discord.ext import tasks
-from redbot.core import commands, app_commands
+from discord.ext import commands
+from redbot.core import app_commands
 from redbot.core.bot import Red
 from typing import Dict, List
 
@@ -40,7 +40,7 @@ class EmpireGame(commands.Cog):
             description=(
                 "Rules\n"
                 "・You can only save your alias once. No keyboard smashes allowed or making it break the rules.\n"
-                "・if you miss two turns you’ll be disqualified.\n"
+                "・If you miss two turns you’ll be disqualified.\n"
                 "・Max is 15 players.\n\n"
             ),
             color=discord.Color.purple()
@@ -70,7 +70,8 @@ class EmpireGame(commands.Cog):
         view.add_item(cancel_button)
         view.add_item(explain_button)
 
-        await interaction.response.send_message(embed=embed, view=view)
+        message = await interaction.response.send_message(embed=embed, view=view)
+        self.setup_message = await message.original_response()
         self.joining_channel = interaction.channel
         self.players = {}
         self.aliases = {}
@@ -96,7 +97,7 @@ class EmpireGame(commands.Cog):
         self.missed_turns[interaction.user.id] = 0
         member = interaction.guild.get_member(interaction.user.id)
         self.original_permissions[interaction.user.id] = interaction.channel.overwrites_for(member)
-        await self.update_join_embed(interaction)
+        await self.update_join_embed()
 
     async def leave_button_callback(self, interaction: discord.Interaction):
         if not self.game_setup:
@@ -110,25 +111,25 @@ class EmpireGame(commands.Cog):
         self.players.pop(interaction.user.id)
         self.missed_turns.pop(interaction.user.id)
         self.original_permissions.pop(interaction.user.id, None)
-        await self.update_join_embed(interaction)
+        await self.update_join_embed()
 
-    async def update_join_embed(self, interaction: discord.Interaction):
-        players_list = "\n\n".join([interaction.guild.get_member(pid).mention for pid in self.players])
+    async def update_join_embed(self):
+        players_list = "\n\n".join([self.joining_channel.guild.get_member(pid).mention for pid in self.players])
         embed = discord.Embed(
             title="Empire Game Setup",
             description=(
                 "Rules\n"
                 "・You can only save your alias once. No keyboard smashes allowed or making it break the rules.\n"
-                "・if you miss two turns you’ll be disqualified.\n"
+                "・If you miss two turns you’ll be disqualified.\n"
                 "・Max is 15 players.\n\n"
-                f"**Players Joined ({len(self.players)}/15)**:\n{players_list}"
+                f"Players Joined ({len(self.players)}/15):\n{players_list}"
             ),
             color=discord.Color.purple()
         )
         embed.set_footer(text="Empire Game | Join now!")
         embed.set_image(url="https://media.discordapp.net/attachments/1124416523910516736/1247270073987629067/image.png?ex=665f6a46&is=665e18c6&hm=3f7646ef6790d96e8c5b6f93bf45e1c57179fd809ef4d034ed1d330287d5ce7b&=&format=webp&quality=lossless&width=836&height=557")
 
-        await interaction.response.edit_message(embed=embed)
+        await self.setup_message.edit(embed=embed)
 
     async def start_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.host:
