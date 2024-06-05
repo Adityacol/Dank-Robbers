@@ -224,7 +224,6 @@ class EmpireGame(commands.Cog):
             await self.announce_winner(interaction)
             return
 
-        self.current_turn = self.current_turn % len(self.turn_order)
         current_player_id = self.turn_order[self.current_turn]
         current_player = interaction.guild.get_member(current_player_id)
 
@@ -306,12 +305,32 @@ class EmpireGame(commands.Cog):
             if len(self.players) < 2:
                 await self.announce_winner(interaction)
                 return
-            # Keep the current player for another turn
-            await self.start_guessing(interaction)
+            await self.continue_turn(interaction)  # Grant an extra turn
         else:
             await interaction.response.send_message(f"❌ Wrong guess. It's now the next player's turn.")
             self.advance_turn()
             await self.start_guessing(interaction)
+
+    async def continue_turn(self, interaction: discord.Interaction):
+        current_player_id = self.turn_order[self.current_turn]
+        current_player = interaction.guild.get_member(current_player_id)
+
+        shuffled_aliases = random.sample(list(self.aliases.values()), len(self.aliases))
+        players_aliases = list(zip([interaction.guild.get_member(pid).mention for pid in self.players], shuffled_aliases))
+        players_field = "\n".join([player for player, _ in players_aliases])
+        aliases_field = "\n".join([alias for _, alias in players_aliases])
+
+        embed = discord.Embed(
+            title=f"{current_player.display_name}'s turn continues!",
+            color=discord.Color.green()
+        )
+        embed.add_field(name="Players", value=players_field, inline=True)
+        embed.add_field(name="Aliases", value=aliases_field, inline=True)
+        await interaction.channel.send(content=current_player.mention, embed=embed)
+
+        if self.turn_timer:
+            self.turn_timer.cancel()
+        self.turn_timer = self.bot.loop.create_task(self.turn_timeout(interaction))
 
     async def announce_winner(self, interaction: discord.Interaction):
         if not self.players:
