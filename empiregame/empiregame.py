@@ -229,8 +229,11 @@ class EmpireGame(commands.Cog):
         current_player_id = self.turn_order[self.current_turn]
         current_player = interaction.guild.get_member(current_player_id)
 
-        while self.players[current_player_id] is None:
+        while self.players.get(current_player_id) is None:
             self.advance_turn()
+            if len(self.players) < 2:
+                await self.announce_winner(interaction)
+                return
             current_player_id = self.turn_order[self.current_turn]
             current_player = interaction.guild.get_member(current_player_id)
 
@@ -262,11 +265,11 @@ class EmpireGame(commands.Cog):
 
         if self.missed_turns[current_player_id] >= 2:
             await interaction.channel.send(f"❗ {current_player.mention} didn't guess an alias for 2 rounds and was eliminated.")
+            role = interaction.guild.get_role(GAME_ROLE_ID)
+            await current_player.remove_roles(role)
             self.players.pop(current_player_id)
             self.aliases.pop(current_player_id)
             self.turn_order.remove(current_player_id)
-            role = interaction.guild.get_role(GAME_ROLE_ID)
-            await current_player.remove_roles(role)
 
             if len(self.players) < 2:
                 await self.announce_winner(interaction)
@@ -296,11 +299,11 @@ class EmpireGame(commands.Cog):
 
         if self.aliases.get(member.id) == guessed_alias:
             await interaction.response.send_message(f"🎉 Correct guess! {member.mention} was eliminated.")
+            role = interaction.guild.get_role(GAME_ROLE_ID)
+            await member.remove_roles(role)
             self.players.pop(member.id)
             self.aliases.pop(member.id)
             self.turn_order.remove(member.id)
-            role = interaction.guild.get_role(GAME_ROLE_ID)
-            await member.remove_roles(role)
             if len(self.players) < 2:
                 await self.announce_winner(interaction)
                 return
@@ -347,10 +350,10 @@ class EmpireGame(commands.Cog):
             self.join_task.cancel()
         self.join_task = None
         self.missed_turns = {}
+        role = self.joining_channel.guild.get_role(GAME_ROLE_ID)
         for player_id in self.original_permissions.keys():
             member = self.joining_channel.guild.get_member(player_id)
             if member:
-                role = self.joining_channel.guild.get_role(GAME_ROLE_ID)
                 await member.remove_roles(role)
         self.original_permissions = {}
 
