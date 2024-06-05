@@ -96,7 +96,6 @@ class EmpireGame(commands.Cog):
         self.missed_turns[interaction.user.id] = 0
         member = interaction.guild.get_member(interaction.user.id)
         self.original_permissions[interaction.user.id] = interaction.channel.overwrites_for(member)
-        # Allow the player to send messages in the channel
         await interaction.channel.set_permissions(member, send_messages=True)
         await self.update_join_embed(interaction)
 
@@ -230,7 +229,6 @@ class EmpireGame(commands.Cog):
         current_player_id = self.turn_order[self.current_turn]
         current_player = interaction.guild.get_member(current_player_id)
 
-        # Skip turn if player hasn't saved their alias
         while self.players[current_player_id] is None:
             self.advance_turn()
             current_player_id = self.turn_order[self.current_turn]
@@ -238,8 +236,8 @@ class EmpireGame(commands.Cog):
 
         shuffled_aliases = random.sample(list(self.aliases.values()), len(self.aliases))
         players_aliases = list(zip([interaction.guild.get_member(pid).mention for pid in self.players], shuffled_aliases))
-        players_field = "\n\n".join([player for player, _ in players_aliases])
-        aliases_field = "\n\n".join([alias for _, alias in players_aliases])
+        players_field = "\n".join([player for player, _ in players_aliases])
+        aliases_field = "\n".join([alias for _, alias in players_aliases])
 
         embed = discord.Embed(
             title=f"{current_player.display_name}'s turn!",
@@ -247,7 +245,6 @@ class EmpireGame(commands.Cog):
         )
         embed.add_field(name="Players", value=players_field, inline=True)
         embed.add_field(name="Aliases", value=aliases_field, inline=True)
-        embed.add_field(name="\u200b", value="\u200b", inline=False)
         await interaction.channel.send(content=current_player.mention, embed=embed)
 
         if self.turn_timer:
@@ -305,8 +302,7 @@ class EmpireGame(commands.Cog):
             if len(self.players) < 2:
                 await self.announce_winner(interaction)
                 return
-            # Grant an extra turn
-            await self.start_guessing(interaction)
+            await self.start_guessing(interaction)  # Grant an extra turn
         else:
             await interaction.response.send_message(f"❌ Wrong guess. It's now the next player's turn.")
             self.advance_turn()
