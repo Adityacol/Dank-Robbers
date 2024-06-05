@@ -1,7 +1,6 @@
 import discord
 import asyncio
 import random
-from discord.ext import tasks
 from redbot.core import commands, app_commands
 from redbot.core.bot import Red
 from typing import Dict, List
