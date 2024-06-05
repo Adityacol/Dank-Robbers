@@ -1,12 +1,13 @@
 import discord
 import asyncio
 import random
-from discord.ext import commands
-from redbot.core import app_commands
+from discord.ext import tasks
+from redbot.core import commands, app_commands
 from redbot.core.bot import Red
 from typing import Dict, List
 
 ROLE_ID = 899916792447766528
+GAME_ROLE_ID = 1030538893088534549  # Role to be added/removed
 
 def has_role(interaction: discord.Interaction):
     return any(role.id == ROLE_ID for role in interaction.user.roles)
@@ -70,8 +71,7 @@ class EmpireGame(commands.Cog):
         view.add_item(cancel_button)
         view.add_item(explain_button)
 
-        message = await interaction.response.send_message(embed=embed, view=view)
-        self.setup_message = await message.original_response()
+        await interaction.response.send_message(embed=embed, view=view)
         self.joining_channel = interaction.channel
         self.players = {}
         self.aliases = {}
@@ -95,9 +95,7 @@ class EmpireGame(commands.Cog):
             return
         self.players[interaction.user.id] = None
         self.missed_turns[interaction.user.id] = 0
-        member = interaction.guild.get_member(interaction.user.id)
-        self.original_permissions[interaction.user.id] = interaction.channel.overwrites_for(member)
-        await self.update_join_embed()
+        await self.update_join_embed(interaction)
 
     async def leave_button_callback(self, interaction: discord.Interaction):
         if not self.game_setup:
@@ -106,15 +104,12 @@ class EmpireGame(commands.Cog):
         if interaction.user.id not in self.players:
             await interaction.response.send_message("❗ You are not part of the game.", ephemeral=True)
             return
-        member = interaction.guild.get_member(interaction.user.id)
-        await interaction.channel.set_permissions(member, overwrite=self.original_permissions.get(interaction.user.id))
         self.players.pop(interaction.user.id)
         self.missed_turns.pop(interaction.user.id)
-        self.original_permissions.pop(interaction.user.id, None)
-        await self.update_join_embed()
+        await self.update_join_embed(interaction)
 
-    async def update_join_embed(self):
-        players_list = "\n\n".join([self.joining_channel.guild.get_member(pid).mention for pid in self.players])
+    async def update_join_embed(self, interaction: discord.Interaction):
+        players_list = "\n\n".join([interaction.guild.get_member(pid).mention for pid in self.players])
         embed = discord.Embed(
             title="Empire Game Setup",
             description=(
@@ -129,7 +124,7 @@ class EmpireGame(commands.Cog):
         embed.set_footer(text="Empire Game | Join now!")
         embed.set_image(url="https://media.discordapp.net/attachments/1124416523910516736/1247270073987629067/image.png?ex=665f6a46&is=665e18c6&hm=3f7646ef6790d96e8c5b6f93bf45e1c57179fd809ef4d034ed1d330287d5ce7b&=&format=webp&quality=lossless&width=836&height=557")
 
-        await self.setup_message.edit(embed=embed)
+        await interaction.response.edit_message(embed=embed)
 
     async def start_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.host:
@@ -146,7 +141,7 @@ class EmpireGame(commands.Cog):
             await interaction.response.send_message("❗ Only the host can cancel the game.", ephemeral=True)
             return
         await interaction.response.send_message("❗ The game has been cancelled.")
-        self.reset_game()
+        await self.reset_game()
 
     async def explain_button_callback(self, interaction: discord.Interaction):
         rules = (
@@ -163,6 +158,10 @@ class EmpireGame(commands.Cog):
         self.turn_order = list(self.players.keys())
         random.shuffle(self.turn_order)
         self.game_started = True
+        for player_id in self.players:
+            member = interaction.guild.get_member(player_id)
+            role = interaction.guild.get_role(GAME_ROLE_ID)
+            await member.add_roles(role)
         await self.notify_players_to_save_alias(interaction)
 
     async def notify_players_to_save_alias(self, interaction: discord.Interaction):
@@ -173,9 +172,6 @@ class EmpireGame(commands.Cog):
             color=discord.Color.green()
         )
         await interaction.channel.send(content=players_mentions, embed=embed)
-        for player_id in self.players:
-            member = interaction.guild.get_member(player_id)
-            await interaction.channel.set_permissions(member, send_messages=True)
         await asyncio.sleep(60)
         await self.check_aliases(interaction)
 
@@ -184,10 +180,11 @@ class EmpireGame(commands.Cog):
         for player_id, alias in list(self.players.items()):
             if alias is None:
                 member = interaction.guild.get_member(player_id)
+                role = interaction.guild.get_role(GAME_ROLE_ID)
+                await member.remove_roles(role)
                 eliminated_players.append(member.mention)
                 self.players.pop(player_id)
                 self.missed_turns.pop(player_id)
-                await interaction.channel.set_permissions(member, overwrite=self.original_permissions.get(player_id))
         
         if eliminated_players:
             eliminated_message = "The following players are eliminated for not saving an alias in time:\n" + "\n".join(eliminated_players)
@@ -268,7 +265,8 @@ class EmpireGame(commands.Cog):
             self.players.pop(current_player_id)
             self.aliases.pop(current_player_id)
             self.turn_order.remove(current_player_id)
-            await interaction.channel.set_permissions(current_player, overwrite=self.original_permissions.get(current_player_id))
+            role = interaction.guild.get_role(GAME_ROLE_ID)
+            await current_player.remove_roles(role)
 
             if len(self.players) < 2:
                 await self.announce_winner(interaction)
@@ -301,7 +299,8 @@ class EmpireGame(commands.Cog):
             self.players.pop(member.id)
             self.aliases.pop(member.id)
             self.turn_order.remove(member.id)
-            await interaction.channel.set_permissions(member, overwrite=self.original_permissions.get(member.id))
+            role = interaction.guild.get_role(GAME_ROLE_ID)
+            await member.remove_roles(role)
             if len(self.players) < 2:
                 await self.announce_winner(interaction)
                 return
@@ -314,23 +313,25 @@ class EmpireGame(commands.Cog):
     async def announce_winner(self, interaction: discord.Interaction):
         if not self.players:
             await interaction.channel.send("❗ There are no players left in the game.")
-            self.reset_game()
+            await self.reset_game()
             return
         winner_id = next(iter(self.players))
         winner = interaction.guild.get_member(winner_id)
+        role = interaction.guild.get_role(GAME_ROLE_ID)
+        await winner.remove_roles(role)
         embed = discord.Embed(
             title="🏆 We Have a Winner!",
             description=f"Congratulations to {winner.mention} for winning the Empire Game!",
             color=discord.Color.gold()
         )
         await interaction.channel.send(embed=embed)
-        self.reset_game()
+        await self.reset_game()
 
     def advance_turn(self):
         if self.turn_order:
             self.current_turn = (self.current_turn + 1) % len(self.turn_order)
 
-    def reset_game(self):
+    async def reset_game(self):
         self.game_setup = False
         self.game_started = False
         self.players = {}
@@ -346,10 +347,11 @@ class EmpireGame(commands.Cog):
             self.join_task.cancel()
         self.join_task = None
         self.missed_turns = {}
-        for player_id, permissions in self.original_permissions.items():
+        for player_id in self.original_permissions.keys():
             member = self.joining_channel.guild.get_member(player_id)
             if member:
-                self.joining_channel.set_permissions(member, overwrite=permissions)
+                role = self.joining_channel.guild.get_role(GAME_ROLE_ID)
+                await member.remove_roles(role)
         self.original_permissions = {}
 
     @commands.Cog.listener()
@@ -358,7 +360,7 @@ class EmpireGame(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild):
-        self.reset_game()
+        await self.reset_game()
 
 async def setup(bot: Red):
     if bot.get_cog('EmpireGame') is None:
