@@ -306,7 +306,8 @@ class EmpireGame(commands.Cog):
             if len(self.players) < 2:
                 await self.announce_winner(interaction)
                 return
-            await self.start_guessing(interaction)  # Grant an extra turn
+            # Keep the current player for another turn
+            await self.start_guessing(interaction)
         else:
             await interaction.response.send_message(f"❌ Wrong guess. It's now the next player's turn.")
             self.advance_turn()
