@@ -96,7 +96,6 @@ class EmpireGame(commands.Cog):
         self.missed_turns[interaction.user.id] = 0
         member = interaction.guild.get_member(interaction.user.id)
         self.original_permissions[interaction.user.id] = interaction.channel.overwrites_for(member)
-        await interaction.channel.set_permissions(member, send_messages=True)
         await self.update_join_embed(interaction)
 
     async def leave_button_callback(self, interaction: discord.Interaction):
@@ -173,6 +172,9 @@ class EmpireGame(commands.Cog):
             color=discord.Color.green()
         )
         await interaction.channel.send(content=players_mentions, embed=embed)
+        for player_id in self.players:
+            member = interaction.guild.get_member(player_id)
+            await interaction.channel.set_permissions(member, send_messages=True)
         await asyncio.sleep(60)
         await self.check_aliases(interaction)
 
