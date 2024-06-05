@@ -7,6 +7,8 @@ from typing import Dict, List
 
 ROLE_ID = 899916792447766528
 GAME_ROLE_ID = 1030538893088534549  # Role to be added/removed
+ALIAS_WORD_LIMIT = 3  # Set the word limit for aliases
+MAX_PLAYERS = 10  # Decreased player limit to 10
 
 def has_role(interaction: discord.Interaction):
     return any(role.id == ROLE_ID for role in interaction.user.roles)
@@ -26,6 +28,7 @@ class EmpireGame(commands.Cog):
         self.join_task = None
         self.missed_turns = {}
         self.original_permissions = {}
+        self.view = None
 
     @app_commands.command(name="setup_empire_game")
     @app_commands.check(has_role)
@@ -41,7 +44,7 @@ class EmpireGame(commands.Cog):
                 "Rules\n"
                 "・You can only save your alias once. No keyboard smashes allowed or making it break the rules.\n"
                 "・If you miss two turns you’ll be disqualified.\n"
-                "・Max is 15 players.\n\n"
+                f"・Max is {MAX_PLAYERS} players.\n\n"
             ),
             color=discord.Color.purple()
         )
@@ -63,14 +66,14 @@ class EmpireGame(commands.Cog):
         explain_button = discord.ui.Button(label="Explain", style=discord.ButtonStyle.secondary)
         explain_button.callback = self.explain_button_callback
 
-        view = discord.ui.View()
-        view.add_item(join_button)
-        view.add_item(leave_button)
-        view.add_item(start_button)
-        view.add_item(cancel_button)
-        view.add_item(explain_button)
+        self.view = discord.ui.View()
+        self.view.add_item(join_button)
+        self.view.add_item(leave_button)
+        self.view.add_item(start_button)
+        self.view.add_item(cancel_button)
+        self.view.add_item(explain_button)
 
-        await interaction.response.send_message(embed=embed, view=view)
+        await interaction.response.send_message(embed=embed, view=self.view)
         self.joining_channel = interaction.channel
         self.players = {}
         self.aliases = {}
@@ -86,8 +89,8 @@ class EmpireGame(commands.Cog):
         if not self.game_setup:
             await interaction.response.send_message("❗ The game is not currently being set up.", ephemeral=True)
             return
-        if len(self.players) >= 15:
-            await interaction.response.send_message("❗ The game already has the maximum number of players.", ephemeral=True)
+        if len(self.players) >= MAX_PLAYERS:
+            await interaction.response.send_message(f"❗ The game already has the maximum number of players ({MAX_PLAYERS}).", ephemeral=True)
             return
         if interaction.user.id in self.players:
             await interaction.response.send_message("❗ You have already joined the game.", ephemeral=True)
@@ -115,8 +118,8 @@ class EmpireGame(commands.Cog):
                 "Rules\n"
                 "・You can only save your alias once. No keyboard smashes allowed or making it break the rules.\n"
                 "・If you miss two turns you’ll be disqualified.\n"
-                "・Max is 15 players.\n\n"
-                f"Players Joined ({len(self.players)}/15):\n{players_list}"
+                f"・Max is {MAX_PLAYERS} players.\n\n"
+                f"Players Joined ({len(self.players)}/{MAX_PLAYERS}):\n{players_list}"
             ),
             color=discord.Color.purple()
         )
@@ -133,6 +136,8 @@ class EmpireGame(commands.Cog):
             await interaction.response.send_message("❗ Not enough players joined the game.", ephemeral=True)
             return
         self.game_setup = False
+        self.view.children[2].disabled = True  # Disable the start button
+        await interaction.response.edit_message(view=self.view)
         await self.start_game(interaction)
 
     async def cancel_button_callback(self, interaction: discord.Interaction):
@@ -206,6 +211,9 @@ class EmpireGame(commands.Cog):
             return
         if self.players[interaction.user.id] is not None:
             await interaction.response.send_message("❗ You have already saved your alias.", ephemeral=True)
+            return
+        if len(alias.split()) > ALIAS_WORD_LIMIT:
+            await interaction.response.send_message(f"❗ Your alias must be {ALIAS_WORD_LIMIT} words or less.", ephemeral=True)
             return
         if alias in self.aliases.values():
             await interaction.response.send_message("❗ This alias has already been taken. Please choose another one.", ephemeral=True)
