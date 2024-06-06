@@ -122,12 +122,7 @@ class EmpireGame(commands.Cog):
         embed.set_footer(text="Empire Game | Join now!")
         embed.set_image(url="https://media.discordapp.net/attachments/1124416523910516736/1247270073987629067/image.png?ex=665f6a46&is=665e18c6&hm=3f7646ef6790d96e8c5b6f93bf45e1c57179fd809ef4d034ed1d330287d5ce7b&=&format=webp&quality=lossless&width=836&height=557")
 
-        view = interaction.message.components[0].children
-        for item in view:
-            if item.label == "Start Game":
-                item.disabled = True
-
-        await interaction.response.edit_message(embed=embed, view=discord.ui.View(*view))
+        await interaction.message.edit(embed=embed)
 
     async def start_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.host:
@@ -138,6 +133,7 @@ class EmpireGame(commands.Cog):
             return
         self.game_setup = False
         await self.start_game(interaction)
+        await self.disable_start_button(interaction)
 
     async def cancel_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.host:
@@ -166,6 +162,14 @@ class EmpireGame(commands.Cog):
             role = interaction.guild.get_role(GAME_ROLE_ID)
             await member.add_roles(role)
         await self.notify_players_to_save_alias(interaction)
+
+    async def disable_start_button(self, interaction: discord.Interaction):
+        view = interaction.message.components[0].children
+        for item in view:
+            if item.label == "Start Game":
+                item.disabled = True
+
+        await interaction.message.edit(view=discord.ui.View(*view))
 
     async def notify_players_to_save_alias(self, interaction: discord.Interaction):
         players_mentions = " ".join([interaction.guild.get_member(pid).mention for pid in self.players])
