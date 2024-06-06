@@ -98,6 +98,7 @@ class EmpireGame(commands.Cog):
         self.players[interaction.user.id] = None
         self.missed_turns[interaction.user.id] = 0
         await self.update_join_embed(interaction)
+        print(f"Player {interaction.user.id} joined the game.")
 
     async def leave_button_callback(self, interaction: discord.Interaction):
         if not self.game_setup:
@@ -109,6 +110,7 @@ class EmpireGame(commands.Cog):
         self.players.pop(interaction.user.id)
         self.missed_turns.pop(interaction.user.id)
         await self.update_join_embed(interaction)
+        print(f"Player {interaction.user.id} left the game.")
 
     async def update_join_embed(self, interaction: discord.Interaction):
         players_list = "\n\n".join([interaction.guild.get_member(pid).mention for pid in self.players])
@@ -139,6 +141,7 @@ class EmpireGame(commands.Cog):
         self.view.children[2].disabled = True  # Disable the start button
         await interaction.response.edit_message(view=self.view)
         await self.start_game(interaction)
+        print("Game started.")
 
     async def cancel_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.host:
@@ -146,6 +149,7 @@ class EmpireGame(commands.Cog):
             return
         await interaction.response.send_message("❗ The game has been cancelled.")
         await self.reset_game()
+        print("Game cancelled.")
 
     async def explain_button_callback(self, interaction: discord.Interaction):
         rules = (
@@ -232,6 +236,9 @@ class EmpireGame(commands.Cog):
             await self.announce_winner(interaction)
             return
 
+        await self.continue_turn(interaction)
+    
+    async def continue_turn(self, interaction: discord.Interaction):
         current_player_id = self.turn_order[self.current_turn]
         current_player = interaction.guild.get_member(current_player_id)
 
@@ -249,7 +256,7 @@ class EmpireGame(commands.Cog):
         aliases_field = "\n".join([alias for _, alias in players_aliases])
 
         embed = discord.Embed(
-            title=f"{current_player.display_name}'s turn!",
+            title=f"{current_player.display_name}'s turn continues!",
             color=discord.Color.green()
         )
         embed.add_field(name="Players", value=players_field, inline=True)
@@ -319,27 +326,6 @@ class EmpireGame(commands.Cog):
             self.advance_turn()
             await self.start_guessing(interaction)
 
-    async def continue_turn(self, interaction: discord.Interaction):
-        current_player_id = self.turn_order[self.current_turn]
-        current_player = interaction.guild.get_member(current_player_id)
-
-        shuffled_aliases = random.sample(list(self.aliases.values()), len(self.aliases))
-        players_aliases = list(zip([interaction.guild.get_member(pid).mention for pid in self.players], shuffled_aliases))
-        players_field = "\n".join([player for player, _ in players_aliases])
-        aliases_field = "\n".join([alias for _, alias in players_aliases])
-
-        embed = discord.Embed(
-            title=f"{current_player.display_name}'s turn continues!",
-            color=discord.Color.green()
-        )
-        embed.add_field(name="Players", value=players_field, inline=True)
-        embed.add_field(name="Aliases", value=aliases_field, inline=True)
-        await interaction.channel.send(content=current_player.mention, embed=embed)
-
-        if self.turn_timer:
-            self.turn_timer.cancel()
-        self.turn_timer = self.bot.loop.create_task(self.turn_timeout(interaction))
-
     async def announce_winner(self, interaction: discord.Interaction):
         if not self.players:
             await interaction.channel.send("❗ There are no players left in the game.")
@@ -386,7 +372,7 @@ class EmpireGame(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        pass
+        print("EmpireGame Cog is ready.")
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild):
