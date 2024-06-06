@@ -317,14 +317,12 @@ class EmpireGame(commands.Cog):
             self.players.pop(member.id)
             self.aliases.pop(member.id)
             self.turn_order.remove(member.id)
-            self.correct_guess = True
             if len(self.players) < 2:
                 await self.announce_winner(interaction)
                 return
             await self.continue_turn(interaction)  # Grant an extra turn
         else:
             await interaction.response.send_message(f"❌ Wrong guess. It's now the next player's turn.")
-            self.correct_guess = False
             self.advance_turn()
             await self.start_guessing(interaction)
 
@@ -346,9 +344,7 @@ class EmpireGame(commands.Cog):
         await self.reset_game()
 
     def advance_turn(self):
-        if not self.correct_guess:
-            self.current_turn = (self.current_turn + 1) % len(self.turn_order)
-        self.correct_guess = False
+        self.current_turn = (self.current_turn + 1) % len(self.turn_order)
 
     async def reset_game(self):
         self.game_setup = False
@@ -366,11 +362,12 @@ class EmpireGame(commands.Cog):
             self.join_task.cancel()
         self.join_task = None
         self.missed_turns = {}
-        role = self.joining_channel.guild.get_role(GAME_ROLE_ID)
-        for player_id in self.original_permissions.keys():
-            member = self.joining_channel.guild.get_member(player_id)
-            if member:
-                await member.remove_roles(role)
+        if self.joining_channel:
+            role = self.joining_channel.guild.get_role(GAME_ROLE_ID)
+            for player_id in self.original_permissions.keys():
+                member = self.joining_channel.guild.get_member(player_id)
+                if member:
+                    await member.remove_roles(role)
         self.original_permissions = {}
 
     @commands.Cog.listener()
