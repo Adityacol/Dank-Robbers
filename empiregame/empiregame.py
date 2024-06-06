@@ -28,7 +28,6 @@ class EmpireGame(commands.Cog):
         self.join_task = None
         self.missed_turns = {}
         self.original_permissions = {}
-        self.correct_guess = False  # Flag to track correct guess
         self.view = None
 
     @app_commands.command(name="setup_empire_game")
@@ -99,7 +98,6 @@ class EmpireGame(commands.Cog):
         self.players[interaction.user.id] = None
         self.missed_turns[interaction.user.id] = 0
         await self.update_join_embed(interaction)
-        print(f"Player {interaction.user.id} joined the game.")
 
     async def leave_button_callback(self, interaction: discord.Interaction):
         if not self.game_setup:
@@ -111,7 +109,6 @@ class EmpireGame(commands.Cog):
         self.players.pop(interaction.user.id)
         self.missed_turns.pop(interaction.user.id)
         await self.update_join_embed(interaction)
-        print(f"Player {interaction.user.id} left the game.")
 
     async def update_join_embed(self, interaction: discord.Interaction):
         players_list = "\n\n".join([interaction.guild.get_member(pid).mention for pid in self.players])
@@ -142,7 +139,6 @@ class EmpireGame(commands.Cog):
         self.view.children[2].disabled = True  # Disable the start button
         await interaction.response.edit_message(view=self.view)
         await self.start_game(interaction)
-        print("Game started.")
 
     async def cancel_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.host:
@@ -150,7 +146,6 @@ class EmpireGame(commands.Cog):
             return
         await interaction.response.send_message("❗ The game has been cancelled.")
         await self.reset_game()
-        print("Game cancelled.")
 
     async def explain_button_callback(self, interaction: discord.Interaction):
         rules = (
@@ -237,10 +232,13 @@ class EmpireGame(commands.Cog):
             await self.announce_winner(interaction)
             return
 
-        self.current_turn = self.current_turn % len(self.turn_order)
         await self.continue_turn(interaction)
 
     async def continue_turn(self, interaction: discord.Interaction):
+        if len(self.turn_order) == 0:
+            await self.announce_winner(interaction)
+            return
+
         current_player_id = self.turn_order[self.current_turn]
         current_player = interaction.guild.get_member(current_player_id)
 
@@ -291,7 +289,6 @@ class EmpireGame(commands.Cog):
                 return
 
         await interaction.channel.send(f"❗ {current_player.mention} took too long to guess. Moving to the next player.")
-        self.correct_guess = False
         self.advance_turn()
         await self.start_guessing(interaction)
 
