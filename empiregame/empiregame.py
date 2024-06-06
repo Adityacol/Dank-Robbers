@@ -28,6 +28,7 @@ class EmpireGame(commands.Cog):
         self.join_task = None
         self.missed_turns = {}
         self.original_permissions = {}
+        self.correct_guess = False  # Flag to track correct guess
         self.view = None
 
     @app_commands.command(name="setup_empire_game")
@@ -236,8 +237,9 @@ class EmpireGame(commands.Cog):
             await self.announce_winner(interaction)
             return
 
+        self.current_turn = self.current_turn % len(self.turn_order)
         await self.continue_turn(interaction)
-    
+
     async def continue_turn(self, interaction: discord.Interaction):
         current_player_id = self.turn_order[self.current_turn]
         current_player = interaction.guild.get_member(current_player_id)
@@ -256,7 +258,7 @@ class EmpireGame(commands.Cog):
         aliases_field = "\n".join([alias for _, alias in players_aliases])
 
         embed = discord.Embed(
-            title=f"{current_player.display_name}'s turn continues!",
+            title=f"{current_player.display_name}'s turn!",
             color=discord.Color.green()
         )
         embed.add_field(name="Players", value=players_field, inline=True)
@@ -289,6 +291,7 @@ class EmpireGame(commands.Cog):
                 return
 
         await interaction.channel.send(f"❗ {current_player.mention} took too long to guess. Moving to the next player.")
+        self.correct_guess = False
         self.advance_turn()
         await self.start_guessing(interaction)
 
@@ -317,12 +320,14 @@ class EmpireGame(commands.Cog):
             self.players.pop(member.id)
             self.aliases.pop(member.id)
             self.turn_order.remove(member.id)
+            self.correct_guess = True
             if len(self.players) < 2:
                 await self.announce_winner(interaction)
                 return
             await self.continue_turn(interaction)  # Grant an extra turn
         else:
             await interaction.response.send_message(f"❌ Wrong guess. It's now the next player's turn.")
+            self.correct_guess = False
             self.advance_turn()
             await self.start_guessing(interaction)
 
@@ -344,8 +349,9 @@ class EmpireGame(commands.Cog):
         await self.reset_game()
 
     def advance_turn(self):
-        if self.turn_order:
+        if not self.correct_guess:
             self.current_turn = (self.current_turn + 1) % len(self.turn_order)
+        self.correct_guess = False
 
     async def reset_game(self):
         self.game_setup = False
