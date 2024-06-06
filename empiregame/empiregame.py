@@ -122,7 +122,7 @@ class EmpireGame(commands.Cog):
         embed.set_footer(text="Empire Game | Join now!")
         embed.set_image(url="https://media.discordapp.net/attachments/1124416523910516736/1247270073987629067/image.png?ex=665f6a46&is=665e18c6&hm=3f7646ef6790d96e8c5b6f93bf45e1c57179fd809ef4d034ed1d330287d5ce7b&=&format=webp&quality=lossless&width=836&height=557")
 
-        await interaction.message.edit(embed=embed)
+        await interaction.edit_original_response(embed=embed)
 
     async def start_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.host:
@@ -131,9 +131,9 @@ class EmpireGame(commands.Cog):
         if len(self.players) < 2:
             await interaction.response.send_message("❗ Not enough players joined the game.", ephemeral=True)
             return
+        await self.disable_start_button(interaction)
         self.game_setup = False
         await self.start_game(interaction)
-        await self.disable_start_button(interaction)
 
     async def cancel_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.host:
@@ -153,6 +153,15 @@ class EmpireGame(commands.Cog):
         )
         await interaction.response.send_message(rules, ephemeral=True)
 
+    async def disable_start_button(self, interaction: discord.Interaction):
+        # Disable the start button
+        message = await interaction.original_response()
+        view = discord.ui.View.from_message(message)
+        for item in view.children:
+            if isinstance(item, discord.ui.Button) and item.label == "Start Game":
+                item.disabled = True
+        await message.edit(view=view)
+
     async def start_game(self, interaction: discord.Interaction):
         self.turn_order = list(self.players.keys())
         random.shuffle(self.turn_order)
@@ -162,14 +171,6 @@ class EmpireGame(commands.Cog):
             role = interaction.guild.get_role(GAME_ROLE_ID)
             await member.add_roles(role)
         await self.notify_players_to_save_alias(interaction)
-
-    async def disable_start_button(self, interaction: discord.Interaction):
-        view = interaction.message.components[0].children
-        for item in view:
-            if item.label == "Start Game":
-                item.disabled = True
-
-        await interaction.message.edit(view=discord.ui.View(*view))
 
     async def notify_players_to_save_alias(self, interaction: discord.Interaction):
         players_mentions = " ".join([interaction.guild.get_member(pid).mention for pid in self.players])
@@ -218,8 +219,8 @@ class EmpireGame(commands.Cog):
         if alias in self.aliases.values():
             await interaction.response.send_message("❗ This alias has already been taken. Please choose another one.", ephemeral=True)
             return
-        if len(alias) > 20:  # Set a word limit for aliases
-            await interaction.response.send_message("❗ Alias is too long. Please choose an alias with 20 characters or less.", ephemeral=True)
+        if len(alias) > 15:  # Set a limit for alias length
+            await interaction.response.send_message("❗ Alias is too long. Please choose one with 15 characters or less.", ephemeral=True)
             return
         self.players[interaction.user.id] = alias
         self.aliases[interaction.user.id] = alias
@@ -235,9 +236,6 @@ class EmpireGame(commands.Cog):
             await self.announce_winner(interaction)
             return
 
-        await self.continue_turn(interaction)
-
-    async def continue_turn(self, interaction: discord.Interaction):
         self.current_turn = self.current_turn % len(self.turn_order)
         current_player_id = self.turn_order[self.current_turn]
         current_player = interaction.guild.get_member(current_player_id)
@@ -326,6 +324,10 @@ class EmpireGame(commands.Cog):
             self.advance_turn()
             await self.start_guessing(interaction)
 
+    async def continue_turn(self, interaction: discord.Interaction):
+        self.current_turn -= 1  # Reset current turn to allow extra turn
+        await self.start_guessing(interaction)
+
     async def announce_winner(self, interaction: discord.Interaction):
         if not self.players:
             await interaction.channel.send("❗ There are no players left in the game.")
@@ -363,6 +365,11 @@ class EmpireGame(commands.Cog):
             self.join_task.cancel()
         self.join_task = None
         self.missed_turns = {}
+        role = self.joining_channel.guild.get_role(GAME_ROLE_ID)
+        for player_id in self.players.keys():
+            member = self.joining_channel.guild.get_member(player_id)
+            if member:
+                await member.remove_roles(role)
 
     @commands.Cog.listener()
     async def on_ready(self):
