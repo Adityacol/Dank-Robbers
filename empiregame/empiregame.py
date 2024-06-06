@@ -71,7 +71,8 @@ class EmpireGame(commands.Cog):
         view.add_item(cancel_button)
         view.add_item(explain_button)
 
-        self.setup_message = await interaction.response.send_message(embed=embed, view=view)
+        await interaction.response.send_message(embed=embed, view=view)
+        self.setup_message = await interaction.original_response()
         self.joining_channel = interaction.channel
         self.players = {}
         self.aliases = {}
@@ -94,7 +95,8 @@ class EmpireGame(commands.Cog):
             return
         self.players[interaction.user.id] = None
         self.missed_turns[interaction.user.id] = 0
-        await self.update_join_embed(interaction)
+        await self.update_join_embed()
+        await interaction.response.send_message("✅ You have joined the game.", ephemeral=True)
 
     async def leave_button_callback(self, interaction: discord.Interaction):
         if not self.game_setup:
@@ -105,10 +107,11 @@ class EmpireGame(commands.Cog):
             return
         self.players.pop(interaction.user.id)
         self.missed_turns.pop(interaction.user.id)
-        await self.update_join_embed(interaction)
+        await self.update_join_embed()
+        await interaction.response.send_message("❌ You have left the game.", ephemeral=True)
 
-    async def update_join_embed(self, interaction: discord.Interaction):
-        players_list = "\n\n".join([interaction.guild.get_member(pid).mention for pid in self.players])
+    async def update_join_embed(self):
+        players_list = "\n\n".join([self.joining_channel.guild.get_member(pid).mention for pid in self.players])
         embed = discord.Embed(
             title="Empire Game Setup",
             description=(
@@ -123,14 +126,14 @@ class EmpireGame(commands.Cog):
         embed.set_footer(text="Empire Game | Join now!")
         embed.set_image(url="https://media.discordapp.net/attachments/1124416523910516736/1247270073987629067/image.png?ex=665f6a46&is=665e18c6&hm=3f7646ef6790d96e8c5b6f93bf45e1c57179fd809ef4d034ed1d330287d5ce7b&=&format=webp&quality=lossless&width=836&height=557")
 
-        await interaction.message.edit(embed=embed)
+        await self.setup_message.edit(embed=embed)
 
     async def disable_start_button(self, interaction: discord.Interaction):
-        for item in interaction.message.components[0].children:
+        for item in self.setup_message.components[0].children:
             if item.label == "Start Game":
                 item.disabled = True
                 break
-        await interaction.message.edit(view=interaction.message.components[0])
+        await self.setup_message.edit(view=self.setup_message.components[0])
 
     async def start_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.host:
@@ -142,6 +145,7 @@ class EmpireGame(commands.Cog):
         await self.disable_start_button(interaction)
         self.game_setup = False
         await self.start_game(interaction)
+        await interaction.response.send_message("🎮 Game has started!", ephemeral=True)
 
     async def cancel_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.host:
