@@ -27,7 +27,6 @@ class EmpireGame(commands.Cog):
         self.turn_timer = None
         self.join_task = None
         self.missed_turns = {}
-        self.original_permissions = {}
         self.view = None
 
     @app_commands.command(name="setup_empire_game")
@@ -83,7 +82,6 @@ class EmpireGame(commands.Cog):
         self.game_started = False
         self.host = interaction.user.id
         self.missed_turns = {}
-        self.original_permissions = {}
 
     async def join_button_callback(self, interaction: discord.Interaction):
         if not self.game_setup:
@@ -362,13 +360,6 @@ class EmpireGame(commands.Cog):
             self.join_task.cancel()
         self.join_task = None
         self.missed_turns = {}
-        if self.joining_channel:
-            role = self.joining_channel.guild.get_role(GAME_ROLE_ID)
-            for player_id in self.original_permissions.keys():
-                member = self.joining_channel.guild.get_member(player_id)
-                if member:
-                    await member.remove_roles(role)
-        self.original_permissions = {}
 
     @commands.Cog.listener()
     async def on_ready(self):
