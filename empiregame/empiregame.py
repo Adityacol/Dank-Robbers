@@ -130,7 +130,7 @@ class EmpireGame(commands.Cog):
         embed.set_footer(text="Empire Game | Join now!")
         embed.set_image(url="https://media.discordapp.net/attachments/1124416523910516736/1247270073987629067/image.png?ex=665f6a46&is=665e18c6&hm=3f7646ef6790d96e8c5b6f93bf45e1c57179fd809ef4d034ed1d330287d5ce7b&=&format=webp&quality=lossless&width=836&height=557")
 
-        await interaction.response.edit_message(embed=embed)
+        await interaction.edit_original_response(embed=embed)
 
     async def start_button_callback(self, interaction: discord.Interaction):
         if interaction.user.id != self.host:
@@ -140,6 +140,7 @@ class EmpireGame(commands.Cog):
             await interaction.response.send_message("❗ Not enough players joined the game.", ephemeral=True)
             return
         self.game_setup = False
+        await interaction.response.defer()
         self.view.children[2].disabled = True  # Disable the start button
         await interaction.edit_original_response(view=self.view)
         await self.start_game(interaction)
@@ -188,11 +189,13 @@ class EmpireGame(commands.Cog):
             if player.alias is None:
                 role = interaction.guild.get_role(GAME_ROLE_ID)
                 await player.user_object.remove_roles(role)
-                player.alive = False
                 eliminated_players.append(player.user_object.mention)
+                player.alive = False
         
         if eliminated_players:
-            eliminated_message = "The following players are eliminated for not saving an alias in time:\n" + "\n".join(eliminated_players)
+            eliminated_message = (
+                "The following players are eliminated for not saving an alias in time:\n" + "\n".join(eliminated_players)
+            )
             await interaction.channel.send(eliminated_message)
         
         if sum(1 for player in self.players.values() if player.alive) < 2:
