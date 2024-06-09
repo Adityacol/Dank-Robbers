@@ -254,6 +254,10 @@ class EmpireGame(commands.Cog):
             current_player_id = self.turn_order[self.current_turn]
             current_player = interaction.guild.get_member(current_player_id)
 
+        if len(self.players) < 2:
+            await self.announce_winner(interaction)
+            return
+
         shuffled_aliases = random.sample(list(self.aliases.values()), len(self.aliases))
         players_aliases = list(zip([interaction.guild.get_member(pid).mention for pid in self.players], shuffled_aliases))
         players_field = "\n".join([player for player, _ in players_aliases])
@@ -333,21 +337,18 @@ class EmpireGame(commands.Cog):
             await self.start_guessing(interaction)
 
     async def announce_winner(self, interaction: discord.Interaction):
-        if not self.players:
-            await interaction.channel.send("❗ There are no players left in the game.")
+        if len(self.players) == 1:
+            winner_id = next(iter(self.players))
+            winner = interaction.guild.get_member(winner_id)
+            role = interaction.guild.get_role(GAME_ROLE_ID)
+            await winner.remove_roles(role)
+            embed = discord.Embed(
+                title="🏆 We Have a Winner!",
+                description=f"Congratulations to {winner.mention} for winning the Empire Game!",
+                color=discord.Color.gold()
+            )
+            await interaction.channel.send(embed=embed)
             await self.reset_game()
-            return
-        winner_id = next(iter(self.players))
-        winner = interaction.guild.get_member(winner_id)
-        role = interaction.guild.get_role(GAME_ROLE_ID)
-        await winner.remove_roles(role)
-        embed = discord.Embed(
-            title="🏆 We Have a Winner!",
-            description=f"Congratulations to {winner.mention} for winning the Empire Game!",
-            color=discord.Color.gold()
-        )
-        await interaction.channel.send(embed=embed)
-        await self.reset_game()
 
     def advance_turn(self):
         if not self.correct_guess:
