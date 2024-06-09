@@ -349,6 +349,7 @@ class EmpireGame(commands.Cog):
             if len(self.players) < 2:
                 await self.announce_winner(interaction)
                 return
+
         else:
             await interaction.channel.send(f"❗ {current_player.mention} took too long to guess. Moving to the next player.")
 
