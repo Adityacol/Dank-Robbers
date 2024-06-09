@@ -298,7 +298,7 @@ class EmpireGame(commands.Cog):
 
         await interaction.channel.send(f"❗ {current_player.mention} took too long to guess. Moving to the next player.")
         self.advance_turn()
-        await self.start_guessing(interaction)
+        await self.continue_turn(interaction)
 
     @app_commands.command(name="guess_alias")
     async def guess_alias(self, interaction: discord.Interaction, member: discord.Member, guessed_alias: str):
@@ -325,19 +325,18 @@ class EmpireGame(commands.Cog):
             self.players.pop(member.id)
             self.aliases.pop(member.id)
             self.turn_order.remove(member.id)
-            self.correct_guess = True
 
             if len(self.players) < 2:
                 await self.announce_winner(interaction)
                 return
 
-            # Grant an extra turn by calling continue_turn directly
-            await self.continue_turn(interaction)
+            self.correct_guess = True
+            await self.continue_turn(interaction)  # Grant an extra turn
         else:
             await interaction.response.send_message(f"❌ Wrong guess. It's now the next player's turn.")
             self.correct_guess = False
             self.advance_turn()
-            await self.start_guessing(interaction)
+            await self.continue_turn(interaction)
 
     async def announce_winner(self, interaction: discord.Interaction):
         if len(self.players) == 1:
