@@ -240,10 +240,13 @@ class EmpireGame(commands.Cog):
             await self.announce_winner(interaction)
             return
 
+        if self.current_turn >= len(self.turn_order):
+            self.current_turn = 0
+
         current_player_id = self.turn_order[self.current_turn]
         current_player = interaction.guild.get_member(current_player_id)
 
-        while self.players.get(current_player_id) is None:
+        while current_player_id not in self.players:
             self.advance_turn()
             if len(self.players) < 2:
                 await self.announce_winner(interaction)
