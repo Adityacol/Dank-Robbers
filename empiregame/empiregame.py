@@ -7,7 +7,7 @@ from typing import Dict, List
 
 ROLE_ID = 899916792447766528
 GAME_ROLE_ID = 1030538893088534549  # Role to be added/removed
-ALIAS_WORD_LIMIT = 3  # Set the word limit for aliases
+ALIAS_WORD_LIMIT = 2  # Set the word limit for aliases
 MAX_PLAYERS = 10  # Decreased player limit to 10
 
 def has_role(interaction: discord.Interaction):
