@@ -358,7 +358,6 @@ class EmpireGame(commands.Cog):
         self.aliases = {}
         self.turn_order = []
         self.current_turn = 0
-        self.joining_channel = None
         self.host = None
         if self.turn_timer:
             self.turn_timer.cancel()
@@ -367,12 +366,14 @@ class EmpireGame(commands.Cog):
             self.join_task.cancel()
         self.join_task = None
         self.missed_turns = {}
-        role = self.joining_channel.guild.get_role(GAME_ROLE_ID)
-        for player_id in self.original_permissions.keys():
-            member = self.joining_channel.guild.get_member(player_id)
-            if member:
-                await member.remove_roles(role)
-        self.original_permissions = {}
+        if self.joining_channel is not None:
+            role = self.joining_channel.guild.get_role(GAME_ROLE_ID)
+            for player_id in self.original_permissions.keys():
+                member = self.joining_channel.guild.get_member(player_id)
+                if member:
+                    await member.remove_roles(role)
+            self.original_permissions = {}
+            self.joining_channel = None
 
     @commands.Cog.listener()
     async def on_ready(self):
