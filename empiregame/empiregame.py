@@ -7,7 +7,7 @@ from typing import Dict, List
 
 ROLE_ID = 899916792447766528
 GAME_ROLE_ID = 1030538893088534549  # Role to be added/removed
-ALIAS_WORD_LIMIT = 2  # Set the word limit for aliases
+ALIAS_WORD_LIMIT = 3  # Set the word limit for aliases
 MAX_PLAYERS = 10  # Decreased player limit to 10
 
 def has_role(interaction: discord.Interaction):
@@ -326,10 +326,13 @@ class EmpireGame(commands.Cog):
             self.aliases.pop(member.id)
             self.turn_order.remove(member.id)
             self.correct_guess = True
+
             if len(self.players) < 2:
                 await self.announce_winner(interaction)
                 return
-            await self.continue_turn(interaction)  # Grant an extra turn
+
+            # Grant an extra turn by calling continue_turn directly
+            await self.continue_turn(interaction)
         else:
             await interaction.response.send_message(f"❌ Wrong guess. It's now the next player's turn.")
             self.correct_guess = False
