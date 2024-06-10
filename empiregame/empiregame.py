@@ -34,9 +34,7 @@ class EmpireGame(commands.Cog):
         self.joining_channel = None
         self.host = None
         self.turn_timer = None
-        self.join_task = None
         self.missed_turns = {}
-        self.original_permissions = {}
         self.extra_turn = False  # Flag to track extra turn
         self.view = None
 
@@ -94,7 +92,6 @@ class EmpireGame(commands.Cog):
         self.game_started = False
         self.host = interaction.user.id
         self.missed_turns = {}
-        self.original_permissions = {}
 
     async def join_button_callback(self, interaction: discord.Interaction):
         if not self.game_setup:
@@ -198,6 +195,7 @@ class EmpireGame(commands.Cog):
                 role = interaction.guild.get_role(GAME_ROLE_ID)
                 await member.remove_roles(role)
                 eliminated_players.append(member.mention)
+                self.dead_players.append(player_id)
                 self.players.pop(player_id)
                 self.missed_turns.pop(player_id)
         
@@ -205,7 +203,7 @@ class EmpireGame(commands.Cog):
             eliminated_message = "The following players are eliminated for not saving an alias in time:\n" + "\n".join(eliminated_players)
             await interaction.channel.send(eliminated_message)
         
-        if len(self.players) < 2:
+        if len(self.players) - len(self.dead_players) < 2:
             await self.announce_winner(interaction)
             return
 
@@ -383,18 +381,8 @@ class EmpireGame(commands.Cog):
         if self.turn_timer:
             self.turn_timer.cancel()
         self.turn_timer = None
-        if self.join_task:
-            self.join_task.cancel()
-        self.join_task = None
         self.missed_turns = {}
-        if self.joining_channel is not None:
-            role = self.joining_channel.guild.get_role(GAME_ROLE_ID)
-            for player_id in self.original_permissions.keys():
-                member = self.joining_channel.guild.get_member(player_id)
-                if member:
-                    await member.remove_roles(role)
-            self.original_permissions = {}
-            self.joining_channel = None
+        self.joining_channel = None
 
     @commands.Cog.listener()
     async def on_ready(self):
