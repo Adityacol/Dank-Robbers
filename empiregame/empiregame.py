@@ -10,7 +10,7 @@ ROLE_ID = 899916792447766528
 GAME_ROLE_ID = 1030538893088534549  # Role to be added/removed
 ALIAS_WORD_LIMIT = 3  # Set the word limit for aliases
 MAX_PLAYERS = 10  # Decreased player limit to 10
-PROFANITY_LIST = ["fuck", "faggot","nigga","nig","retarted"]  # Add your list of slurs here
+PROFANITY_LIST = ["slur1", "slur2"]  # Add your list of slurs here
 
 def has_role(interaction: discord.Interaction):
     return any(role.id == ROLE_ID for role in interaction.user.roles)
@@ -267,11 +267,10 @@ class EmpireGame(commands.Cog):
                 return
 
             self.correct_guess = True
-            await self.continue_turn(interaction)  # Grant an extra turn
+            await self.continue_turn(interaction, grant_extra_turn=True)  # Grant an extra turn
         else:
             await interaction.response.send_message(f"❌ Wrong guess. It's now the next player's turn.")
             self.correct_guess = False
-            self.advance_turn()
             await self.continue_turn(interaction)
 
     @guess_alias.autocomplete('guessed_alias')
@@ -289,13 +288,16 @@ class EmpireGame(commands.Cog):
 
         await self.continue_turn(interaction)
 
-    async def continue_turn(self, interaction: discord.Interaction):
+    async def continue_turn(self, interaction: discord.Interaction, grant_extra_turn=False):
         if len(self.turn_order) == 0:
             await self.announce_winner(interaction)
             return
 
-        if self.current_turn >= len(self.turn_order):
-            self.current_turn = 0
+        if grant_extra_turn:
+            # Do not advance the turn
+            self.correct_guess = False
+        else:
+            self.advance_turn()
 
         current_player_id = self.turn_order[self.current_turn]
         current_player = interaction.guild.get_member(current_player_id)
