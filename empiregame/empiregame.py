@@ -29,6 +29,7 @@ class EmpireGame(commands.Cog):
         self.players = {}
         self.aliases = {}
         self.turn_order = []
+        self.dead_players = []
         self.current_turn = 0
         self.joining_channel = None
         self.host = None
@@ -36,7 +37,7 @@ class EmpireGame(commands.Cog):
         self.join_task = None
         self.missed_turns = {}
         self.original_permissions = {}
-        self.correct_guess = False  # Flag to track correct guess
+        self.extra_turn = False  # Flag to track extra turn
         self.view = None
 
     @app_commands.command(name="setup_empire_game")
@@ -87,6 +88,7 @@ class EmpireGame(commands.Cog):
         self.players = {}
         self.aliases = {}
         self.turn_order = []
+        self.dead_players = []
         self.current_turn = 0
         self.game_setup = True
         self.game_started = False
@@ -258,19 +260,12 @@ class EmpireGame(commands.Cog):
             await interaction.response.send_message(f"🎉 Correct guess! {member.mention} was eliminated.")
             role = interaction.guild.get_role(GAME_ROLE_ID)
             await member.remove_roles(role)
-            self.players.pop(member.id)
-            self.aliases.pop(member.id)
-            self.turn_order.remove(member.id)
-
-            if len(self.players) < 2:
-                await self.announce_winner(interaction)
-                return
-
-            self.correct_guess = True
+            self.dead_players.append(member.id)
+            self.extra_turn = True
             await self.continue_turn(interaction, grant_extra_turn=True)  # Grant an extra turn
         else:
             await interaction.response.send_message(f"❌ Wrong guess. It's now the next player's turn.")
-            self.correct_guess = False
+            self.extra_turn = False
             await self.continue_turn(interaction)
 
     @guess_alias.autocomplete('guessed_alias')
@@ -282,7 +277,7 @@ class EmpireGame(commands.Cog):
         if not self.game_started:
             return
 
-        if len(self.players) < 2:
+        if len(self.players) - len(self.dead_players) < 2:
             await self.announce_winner(interaction)
             return
 
@@ -293,29 +288,27 @@ class EmpireGame(commands.Cog):
             await self.announce_winner(interaction)
             return
 
-        if grant_extra_turn:
-            # Do not advance the turn
-            self.correct_guess = False
-        else:
+        if not grant_extra_turn:
             self.advance_turn()
 
         current_player_id = self.turn_order[self.current_turn]
         current_player = interaction.guild.get_member(current_player_id)
 
-        while current_player_id not in self.players:
+        while current_player_id in self.dead_players:
             self.advance_turn()
-            if len(self.players) < 2:
+            if len(self.players) - len(self.dead_players) < 2:
                 await self.announce_winner(interaction)
                 return
             current_player_id = self.turn_order[self.current_turn]
             current_player = interaction.guild.get_member(current_player_id)
 
-        if len(self.players) < 2:
+        if len(self.players) - len(self.dead_players) < 2:
             await self.announce_winner(interaction)
             return
 
-        shuffled_aliases = random.sample(list(self.aliases.values()), len(self.aliases))
-        players_aliases = list(zip([interaction.guild.get_member(pid).mention for pid in self.players], shuffled_aliases))
+        alive_players = [interaction.guild.get_member(pid).mention for pid in self.players if pid not in self.dead_players]
+        shuffled_aliases = random.sample([self.aliases[pid] for pid in self.players if pid not in self.dead_players], len(self.aliases))
+        players_aliases = list(zip(alive_players, shuffled_aliases))
         players_field = "\n".join([player for player, _ in players_aliases])
         aliases_field = "\n".join([alias for _, alias in players_aliases])
 
@@ -344,24 +337,23 @@ class EmpireGame(commands.Cog):
             await interaction.channel.send(f"❗ {current_player.mention} didn't guess an alias for 2 rounds and was eliminated.")
             role = interaction.guild.get_role(GAME_ROLE_ID)
             await current_player.remove_roles(role)
-            self.players.pop(current_player_id)
-            self.aliases.pop(current_player_id)
-            self.turn_order.remove(current_player_id)
+            self.dead_players.append(current_player_id)
 
-            if len(self.players) < 2:
+            if len(self.players) - len(self.dead_players) < 2:
                 await self.announce_winner(interaction)
                 return
 
         else:
             await interaction.channel.send(f"❗ {current_player.mention} took too long to guess. Moving to the next player.")
 
-        self.correct_guess = False
+        self.extra_turn = False
         self.advance_turn()
         await self.continue_turn(interaction)
 
     async def announce_winner(self, interaction: discord.Interaction):
-        if len(self.players) == 1:
-            winner_id = next(iter(self.players))
+        alive_players = [pid for pid in self.players if pid not in self.dead_players]
+        if len(alive_players) == 1:
+            winner_id = alive_players[0]
             winner = interaction.guild.get_member(winner_id)
             role = interaction.guild.get_role(GAME_ROLE_ID)
             await winner.remove_roles(role)
@@ -382,6 +374,7 @@ class EmpireGame(commands.Cog):
         self.players = {}
         self.aliases = {}
         self.turn_order = []
+        self.dead_players = []
         self.current_turn = 0
         self.host = None
         if self.turn_timer:
