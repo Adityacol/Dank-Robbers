@@ -366,7 +366,10 @@ class EmpireGame(commands.Cog):
             await self.reset_game()
 
     def advance_turn(self):
-        self.current_turn = (self.current_turn + 1) % len(self.turn_order)
+        while True:
+            self.current_turn = (self.current_turn + 1) % len(self.turn_order)
+            if self.turn_order[self.current_turn] not in self.dead_players:
+                break
 
     async def reset_game(self):
         self.game_setup = False
