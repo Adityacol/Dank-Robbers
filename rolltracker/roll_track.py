@@ -5,7 +5,7 @@ import re
 import json
 from discord.ext import tasks
 
-class EmbedTracker(commands.Cog):
+class RollTracker(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.tracked_channel_id = 1249773817484673145  # Replace with the actual channel ID to track
