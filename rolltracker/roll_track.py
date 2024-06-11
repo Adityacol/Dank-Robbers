@@ -5,7 +5,7 @@ import re
 import json
 from discord.ext import tasks
 
-class RollTracker(commands.Cog):
+class RollTrack(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.tracked_channel_id = 1249773817484673145  # Replace with the actual channel ID to track
@@ -221,5 +221,5 @@ class RollTracker(commands.Cog):
                 del self.sent_embeds[message_id]
 
 async def setup(bot):
-    cog = RollTracker(bot)
+    cog = RollTrack(bot)
     await bot.add_cog(cog)
