@@ -221,5 +221,5 @@ class RollTracker(commands.Cog):
                 del self.sent_embeds[message_id]
 
 async def setup(bot):
-    cog = EmbedTracker(bot)
+    cog = RollTracker(bot)
     await bot.add_cog(cog)
