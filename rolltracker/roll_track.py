@@ -98,7 +98,7 @@ class RollTrack(commands.Cog):
         elif roll_number == 500:
             return "Work box", 1
         elif 501 <= roll_number <= 800:
-            return "Worms", 3
+            return "Worm", 3
         elif 801 <= roll_number <= 999:
             return "Cell phone", 2
         elif roll_number == 1000:
@@ -110,7 +110,7 @@ class RollTrack(commands.Cog):
         elif roll_number == 1500:
             return "Cookies", 400
         elif 1501 <= roll_number <= 1800:
-            return "Ants", 10
+            return "Ant", 10
         elif 1801 <= roll_number <= 1999:
             return "Daily box", 2
         elif roll_number == 2000:
