@@ -1,4 +1,4 @@
-from .embed_tracker import EmbedTracker
+from .roll_track import EmbedTracker
 
 async def setup(bot):
     cog = EmbedTracker(bot)
