@@ -7,7 +7,7 @@ class DailyEmbedTracker(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.tracked_channel_id = 1000987277234819153  # ID of the channel to track
-        self.bot_user_id = 235148962103951360  # ID of the bot that sends the Rumble Royale messages
+        self.bot_user_id = 693167035068317736  # ID of the bot that sends the Rumble Royale messages
         self.daily_rumble_info = {}  # Dictionary to keep track of daily rumble info
 
     @commands.command()
