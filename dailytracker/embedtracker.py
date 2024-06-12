@@ -7,7 +7,6 @@ class DailyEmbedTracker(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.tracked_channel_id = 1000987277234819153  # ID of the channel to track
-        self.target_channel_id = 1233422941681877126  # ID of the channel where you want to send the winner ID
         self.bot_user_id = 235148962103951360  # ID of the bot that sends the Rumble Royale messages
         self.daily_rumble_info = {}  # Dictionary to keep track of daily rumble info
 
@@ -56,6 +55,7 @@ class DailyEmbedTracker(commands.Cog):
             color=discord.Color.gold(),
             timestamp=message_timestamp
         )
+        embed.add_field(name="Message", value=info['message'], inline=False)
         embed.set_thumbnail(url=user.avatar.url if user.avatar else discord.Embed.Empty)
         embed.add_field(name="Next Daily Rumble", value=f"{info['quantity']} {info['rumble_count']}/{info['days']}\nDonated by\n{info['donor']}")
         embed.set_footer(text="Rumble Royale • Keep on battling!")
