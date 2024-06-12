@@ -37,7 +37,7 @@ class DailyEmbedTracker(commands.Cog):
             winner_id = self.extract_winner_id(message.content)
             if winner_id:
                 self.daily_rumble_info[self.tracked_channel_id]['rumble_count'] += 1
-                await self.send_combined_embed(winner_id, message.jump_url, message.created_at, message.channel)
+                await self.send_combined_embed(winner_id, message.jump_url, message.created_at, message)
 
     def extract_winner_id(self, content):
         mention_pattern = r'<@!?(\d+)>'
@@ -46,12 +46,12 @@ class DailyEmbedTracker(commands.Cog):
             return match.group(1)
         return None
 
-    async def send_combined_embed(self, winner_id, message_url, message_timestamp, channel):
+    async def send_combined_embed(self, winner_id, message_url, message_timestamp, original_message):
         user = await self.bot.fetch_user(winner_id)
         info = self.daily_rumble_info[self.tracked_channel_id]
         embed = discord.Embed(
             title=f"Congratulations {user.name}! 🎉",
-            description=f"You won {info['quantity']} from Daily Rumble! Copy [the link of this message]({message_url}) and follow the directions in https://discord.com/channels/895344237204369458/1036369248945193010 (Claim within 24h of winning!)",
+            description=f"You won {info['quantity']} from Daily Rumble! Copy [the link of this message]({message_url}) and follow the directions in #giveaway-claiming. (Claim within 24h of winning!)",
             color=discord.Color.gold(),
             timestamp=message_timestamp
         )
@@ -59,7 +59,7 @@ class DailyEmbedTracker(commands.Cog):
         embed.set_thumbnail(url=user.avatar.url if user.avatar else discord.Embed.Empty)
         embed.add_field(name="Next Daily Rumble", value=f"{info['quantity']} {info['rumble_count']}/{info['days']}\nDonated by\n{info['donor']}")
         embed.set_footer(text="Rumble Royale • Keep on battling!")
-        await channel.send(embed=embed)
+        await original_message.reply(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(DailyEmbedTracker(bot))
