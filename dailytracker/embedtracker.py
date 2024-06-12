@@ -51,7 +51,7 @@ class DailyEmbedTracker(commands.Cog):
         info = self.daily_rumble_info[self.tracked_channel_id]
         embed = discord.Embed(
             title=f"Congratulations {user.name}! 🎉",
-            description=f"You won {info['quantity']} from Daily Rumble! Copy [the link of this message]({message_url}) and follow the directions in #giveaway-claiming. (Claim within 24h of winning!)",
+            description=f"You won {info['quantity']} from Daily Rumble! Copy [the link of this message]({message_url}) and follow the directions in https://discord.com/channels/895344237204369458/1036369248945193010 (Claim within 24h of winning!)",
             color=discord.Color.gold(),
             timestamp=message_timestamp
         )
