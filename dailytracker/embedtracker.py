@@ -19,7 +19,7 @@ class DailyEmbedTracker(commands.Cog):
     @commands.command()
     async def dailyrumble(self, ctx, days: int, quantity: str, donor: str, *, message: str):
         end_date = datetime.utcnow() + timedelta(days=days)
-        self.daily_rumble_info[ctx.channel.id] = {
+        self.daily_rumble_info[self.tracked_channel_id] = {
             "end_date": end_date,
             "donor": donor,
             "message": message,
@@ -29,15 +29,22 @@ class DailyEmbedTracker(commands.Cog):
         }
         await ctx.send(f"Daily Rumble set for {days} days by {donor} donating {quantity}. It will end on {end_date.strftime('%Y-%m-%d %H:%M:%S')} UTC.")
 
+    @commands.command()
+    async def clearrumble(self, ctx):
+        self.daily_rumble_info = {}
+        self.rumble_count = 0
+        await ctx.send("All previously fed daily rumbles have been cleared.")
+
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.channel.id == self.tracked_channel_id and message.author.id == self.bot_user_id:
+            if self.tracked_channel_id not in self.daily_rumble_info:
+                return  # Ensure dailyrumble command has been run first
+
             winner_id = self.extract_winner_id(message.content)
             if winner_id:
                 self.daily_rumble_info[self.tracked_channel_id]['rumble_count'] += 1
-                await self.send_winner_id(winner_id, message.jump_url, message.created_at)
-                await self.reply_to_tracked_message(message, winner_id)
-                await self.send_daily_rumble_embed(message.channel)
+                await self.send_combined_embed(winner_id, message.jump_url, message.created_at, message.channel)
 
     def extract_winner_id(self, content):
         mention_pattern = r'<@!?(\d+)>'
@@ -46,51 +53,22 @@ class DailyEmbedTracker(commands.Cog):
             return match.group(1)
         return None
 
-    async def send_winner_id(self, winner_id, message_url, message_timestamp):
-        target_channel = self.bot.get_channel(self.target_channel_id)
-        if target_channel:
-            user = await self.bot.fetch_user(winner_id)
-            embed = discord.Embed(
-                title=f"Congratulations {user.name}! 🎉",
-                description=f"Daily Rumble Payout",
-                color=discord.Color.gold(),
-                timestamp=message_timestamp
-            )
-            embed.set_thumbnail(url=user.avatar.url if user.avatar else discord.Embed.Empty)
-            embed.add_field(name="Next Daily Rumble", value=f"{self.daily_rumble_info[self.tracked_channel_id]['quantity']} {self.daily_rumble_info[self.tracked_channel_id]['rumble_count']}/{self.daily_rumble_info[self.tracked_channel_id]['days']}\nDonated by\n{self.daily_rumble_info[self.tracked_channel_id]['donor']}")
-            embed.add_field(name="Payout Command", value=f"```/serverevents payout user:{winner_id} quantity:{self.daily_rumble_info[self.tracked_channel_id]['quantity']}```", inline=False)
-            embed.set_footer(text="Rumble Royale • Keep on battling!")
-            message = await target_channel.send(embed=embed)
-            await message.add_reaction(self.loading_emoji)
-            self.sent_embeds[message.id] = {"winner_id": winner_id, "payer_id": None}
-
-    async def reply_to_tracked_message(self, message, winner_id):
+    async def send_combined_embed(self, winner_id, message_url, message_timestamp, channel):
         user = await self.bot.fetch_user(winner_id)
-        reply_embed = discord.Embed(
-            title="🎉 Congratulations!",
-            description=f"**Congratulations {user.mention} for winning!**\n\n"
-                        "*Please turn on your passive or use fake ID and padlock.*\n\n"
-                        "*Payouts will be automatic, please wait patiently.*",
-            color=discord.Color.gold()
+        info = self.daily_rumble_info[self.tracked_channel_id]
+        embed = discord.Embed(
+            title=f"Congratulations {user.name}! 🎉",
+            description=f"You won {info['quantity']} from Daily Rumble! Copy [the link of this message]({message_url}) and follow the directions in #giveaway-claiming. (Claim within 24h of winning!)",
+            color=discord.Color.gold(),
+            timestamp=message_timestamp
         )
-        reply_embed.set_footer(text="Rumble Royale • Keep on battling!")
-        await message.reply(embed=reply_embed)
-
-    async def send_daily_rumble_embed(self, channel):
-        if self.tracked_channel_id in self.daily_rumble_info:
-            info = self.daily_rumble_info[self.tracked_channel_id]
-            if datetime.utcnow() >= info["end_date"]:
-                managers_channel = self.bot.get_channel(1230167620972576836)  # ID of the manager notification channel
-                await managers_channel.send(f"Daily Rumble donation period has ended. Please contact {info['donor']} to redonate.")
-                del self.daily_rumble_info[self.tracked_channel_id]
-            else:
-                remaining_days = (info["end_date"] - datetime.utcnow()).days
-                embed = discord.Embed(
-                    title="Daily Rumble",
-                    description=f"Next Daily Rumble\n{info['quantity']} {info['rumble_count']}/{info['days']}\nDonated by\n{info['donor']}",
-                    color=discord.Color.gold()
-                )
-                await channel.send(embed=embed)
+        embed.set_thumbnail(url=user.avatar.url if user.avatar else discord.Embed.Empty)
+        embed.add_field(name="Next Daily Rumble", value=f"{info['quantity']} {info['rumble_count']}/{info['days']}\nDonated by\n{info['donor']}")
+        embed.add_field(name="Payout Command", value=f"```/serverevents payout user:{winner_id} quantity:{info['quantity']}```", inline=False)
+        embed.set_footer(text="Rumble Royale • Keep on battling!")
+        message = await channel.send(embed=embed)
+        await message.add_reaction(self.loading_emoji)
+        self.sent_embeds[message.id] = {"winner_id": winner_id, "payer_id": None}
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload):
