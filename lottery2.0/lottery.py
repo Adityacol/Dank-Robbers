@@ -61,7 +61,7 @@ class Lottery(commands.Cog):
                 else:
                     await self.end_lottery(guild_id)
 
-    @tasks.loop(seconds=5)  # Adjust the frequency as needed
+    @tasks.loop(seconds=240)  # Adjust the frequency as needed
     async def schedule_lottery(self):
         print("Checking lottery schedule...")
         now = datetime.utcnow()  # Get current datetime
