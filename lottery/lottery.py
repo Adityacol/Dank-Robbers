@@ -199,6 +199,10 @@ class Lottery(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
+        # Ignore messages sent by the bot itself
+        if message.author == self.bot.user:
+            return
+
         config = self.load_config()
         guild_id = str(message.guild.id)
         channel_id = config.get(guild_id, {}).get('channel_id')
