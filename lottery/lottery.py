@@ -67,7 +67,7 @@ class Lottery(commands.Cog):
 
     @tasks.loop(seconds=240)  # Adjust the frequency as needed
     async def schedule_lottery(self):
-        print("Checking lottery schedule...")
+        print(f"Checking lottery schedule at {datetime.utcnow()}...")
         now = datetime.utcnow()  # Get current datetime
         config = self.load_config()
         for guild_id, guild_config in config.items():
@@ -75,7 +75,7 @@ class Lottery(commands.Cog):
                 start_time_str = guild_config['start_time']
                 start_time = datetime.strptime(start_time_str, "%H:%M").replace(year=now.year, month=now.month, day=now.day)
                 if start_time <= now < (start_time + timedelta(seconds=LOTTERY_DURATION)):
-                    print(f"Starting a new lottery in guild {guild_id}...")
+                    print(f"Starting a new lottery in guild {guild_id} at {now}...")
                     await self.start_lottery(guild_id)
                 elif now >= (start_time + timedelta(seconds=LOTTERY_DURATION)):
                     if 'end_time' in guild_config:
