@@ -266,10 +266,3 @@ class Lottery(commands.Cog):
         data[guild_id][str(user.id)] = user_data
         self.save_guild_data(data)
         return user_data['tickets']
-
-async def setup(bot):
-    if bot.get_cog('Lottery') is None:
-        await bot.add_cog(Lottery(bot))
-        print("Lottery cog setup completed")
-    else:
-        print("Lottery cog is already loaded")
