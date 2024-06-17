@@ -72,10 +72,14 @@ class Lottery(commands.Cog):
             if 'start_time' in guild_config:
                 start_time_str = guild_config['start_time']
                 start_time = datetime.strptime(start_time_str, "%H:%M").replace(year=now.year, month=now.month, day=now.day)
-                end_time = start_time + timedelta(minutes=1)  # Create end time for comparison
-                if start_time <= now <= end_time:
-                    print("Starting a new lottery...")
+                if start_time <= now < (start_time + timedelta(seconds=LOTTERY_DURATION)):
+                    print(f"Starting a new lottery in guild {guild_id}...")
                     await self.start_lottery(guild_id)
+                elif now >= (start_time + timedelta(seconds=LOTTERY_DURATION)):
+                    if 'end_time' in guild_config:
+                        await self.end_lottery(guild_id)
+                        del guild_config['end_time']
+                        self.save_config(config)
 
     async def start_lottery(self, guild_id):
         config = self.load_config()
