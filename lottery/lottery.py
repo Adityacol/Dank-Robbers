@@ -18,6 +18,7 @@ class Lottery(commands.Cog):
         self.tickets_path = cog_data_path(self) / "guild_tickets.json"
         self.schedule_lottery.start()
         self.bot.loop.create_task(self.check_lottery_on_startup())
+        print("Lottery cog initialized")
 
     def cog_unload(self):
         self.schedule_lottery.cancel()
@@ -74,7 +75,6 @@ class Lottery(commands.Cog):
                 if start_time <= now <= end_time:
                     print("Starting a new lottery...")
                     await self.start_lottery(guild_id)
-                
 
     async def start_lottery(self, guild_id):
         config = self.load_config()
@@ -176,6 +176,7 @@ class Lottery(commands.Cog):
 
     @commands.command()
     async def set_lottery_channel(self, ctx):
+        print("set_lottery_channel command invoked")
         config = self.load_config()
         guild_config = config.get(str(ctx.guild.id), {})
         guild_config['channel_id'] = ctx.channel.id
@@ -185,6 +186,7 @@ class Lottery(commands.Cog):
 
     @commands.command()
     async def set_lottery_time(self, ctx, start_time: str):
+        print("set_lottery_time command invoked")
         try:
             datetime.strptime(start_time, "%H:%M")
         except ValueError:
@@ -252,3 +254,4 @@ class Lottery(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(Lottery(bot))
+    print("Lottery cog setup completed")
