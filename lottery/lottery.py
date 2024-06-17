@@ -74,6 +74,7 @@ class Lottery(commands.Cog):
                 if start_time <= now <= end_time:
                     print("Starting a new lottery...")
                     await self.start_lottery(guild_id)
+                time_set_this_loop= True
 
     async def start_lottery(self, guild_id):
         config = self.load_config()
