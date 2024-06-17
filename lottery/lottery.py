@@ -16,8 +16,10 @@ class Lottery(commands.Cog):
         self.bot = bot
         self.config_path = cog_data_path(self) / "config.json"
         self.tickets_path = cog_data_path(self) / "guild_tickets.json"
-        self.schedule_lottery.start()
+        self.lottery_running = set()
+        
         self.bot.loop.create_task(self.check_lottery_on_startup())
+        self.schedule_lottery.start()
         print(f"Lottery cog initialized for bot: {bot.user}")
 
     def cog_unload(self):
@@ -60,23 +62,27 @@ class Lottery(commands.Cog):
             if 'end_time' in guild_config:
                 end_time = datetime.fromisoformat(guild_config['end_time'])
                 if now < end_time:
+                    if guild_id not in self.lottery_running:
+                        self.lottery_running.add(guild_id)
                     await asyncio.sleep((end_time - now).total_seconds())
                     await self.end_lottery(guild_id)
                 else:
                     await self.end_lottery(guild_id)
 
-    @tasks.loop(seconds=240)  # Adjust the frequency as needed
+    @tasks.loop(seconds=240)
     async def schedule_lottery(self):
         print(f"Checking lottery schedule at {datetime.utcnow()}...")
-        now = datetime.utcnow()  # Get current datetime
+        now = datetime.utcnow()
         config = self.load_config()
         for guild_id, guild_config in config.items():
             if 'start_time' in guild_config:
                 start_time_str = guild_config['start_time']
                 start_time = datetime.strptime(start_time_str, "%H:%M").replace(year=now.year, month=now.month, day=now.day)
                 if start_time <= now < (start_time + timedelta(seconds=LOTTERY_DURATION)):
-                    print(f"Starting a new lottery in guild {guild_id} at {now}...")
-                    await self.start_lottery(guild_id)
+                    if guild_id not in self.lottery_running:
+                        print(f"Starting a new lottery in guild {guild_id} at {now}...")
+                        self.lottery_running.add(guild_id)
+                        await self.start_lottery(guild_id)
                 elif now >= (start_time + timedelta(seconds=LOTTERY_DURATION)):
                     if 'end_time' in guild_config:
                         await self.end_lottery(guild_id)
@@ -86,7 +92,7 @@ class Lottery(commands.Cog):
     async def start_lottery(self, guild_id):
         config = self.load_config()
         guild_config = config.get(str(guild_id), {})
-        
+
         if 'end_time' not in guild_config:
             start_time = datetime.utcnow()
             end_time = start_time + timedelta(seconds=LOTTERY_DURATION)
@@ -121,6 +127,8 @@ class Lottery(commands.Cog):
                     await channel.send("Lottery is already running!") 
 
     async def end_lottery(self, guild_id):
+        if guild_id in self.lottery_running:
+            self.lottery_running.remove(guild_id)
         config = self.load_config()
         guild_config = config.get(str(guild_id), {})
         if 'end_time' in guild_config:
@@ -209,7 +217,6 @@ class Lottery(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        # Ignore messages sent by the bot itself
         if message.author == self.bot.user:
             return
 
