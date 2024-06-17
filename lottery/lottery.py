@@ -18,10 +18,11 @@ class Lottery(commands.Cog):
         self.tickets_path = cog_data_path(self) / "guild_tickets.json"
         self.schedule_lottery.start()
         self.bot.loop.create_task(self.check_lottery_on_startup())
-        print("Lottery cog initialized")
+        print(f"Lottery cog initialized for bot: {bot.user}")
 
     def cog_unload(self):
         self.schedule_lottery.cancel()
+        print("Lottery cog unloaded")
 
     def load_config(self):
         if self.config_path.exists():
