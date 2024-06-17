@@ -264,3 +264,5 @@ async def setup(bot):
     if bot.get_cog('Lottery') is None:
         await bot.add_cog(Lottery(bot))
         print("Lottery cog setup completed")
+    else:
+        print("Lottery cog is already loaded")
