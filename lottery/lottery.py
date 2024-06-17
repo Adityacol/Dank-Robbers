@@ -30,6 +30,7 @@ class Lottery(commands.Cog):
                 with self.config_path.open('r') as file:
                     return json.load(file)
             except json.JSONDecodeError:
+                print("Error loading config file, returning empty config.")
                 return {}
         return {}
 
@@ -43,6 +44,7 @@ class Lottery(commands.Cog):
                 with self.tickets_path.open('r') as file:
                     return json.load(file)
             except json.JSONDecodeError:
+                print("Error loading guild data file, returning empty data.")
                 return {}
         return {}
 
@@ -221,6 +223,7 @@ class Lottery(commands.Cog):
                 description = embed.get('description', '')
                 if "Donation Added" in description:
                     description_lines = description.split('\n')
+                    amount_donated = 0
                     for line in description_lines:
                         if "Donation Added" in line:
                             try:
@@ -258,5 +261,6 @@ class Lottery(commands.Cog):
         return user_data['tickets']
 
 async def setup(bot):
-    await bot.add_cog(Lottery(bot))
-    print("Lottery cog setup completed")
+    if bot.get_cog('Lottery') is None:
+        await bot.add_cog(Lottery(bot))
+        print("Lottery cog setup completed")
