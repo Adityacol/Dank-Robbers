@@ -1,6 +1,6 @@
 import discord
-from redbot.core import commands
-from redbot.core.data_manager import cog_data_path
+from discord.ext import commands
+from redbot.core import commands, Config
 import random
 import json
 import asyncio
@@ -12,77 +12,51 @@ LOTTERY_DURATION = 60 * 5  # 5 minutes for testing
 class Lottery(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.config_path = cog_data_path(self) / "config.json"
-        self.tickets_path = cog_data_path(self) / "guild_tickets.json"
+        self.config = Config.get_conf(self, identifier=1234567890, force_registration=True)
+        self.config.register_guild(
+            channel_id=None,
+            end_time=None,
+            start_time=None
+        )
+        self.tickets = Config.get_conf(self, identifier=1234567891, force_registration=True)
+        self.tickets.register_guild(
+            tickets={}
+        )
         self.lottery_running = set()
-        
         self.bot.loop.create_task(self.check_lottery_on_startup())
 
     def cog_unload(self):
         print("Lottery cog unloaded")
 
-    def load_config(self):
-        if self.config_path.exists():
-            try:
-                with self.config_path.open('r') as file:
-                    return json.load(file)
-            except json.JSONDecodeError:
-                print("Error loading config file, returning empty config.")
-                return {}
-        return {}
-
-    def save_config(self, data):
-        with self.config_path.open('w') as file:
-            json.dump(data, file, indent=4)
-
-    def load_guild_data(self):
-        if self.tickets_path.exists():
-            try:
-                with self.tickets_path.open('r') as file:
-                    return json.load(file)
-            except json.JSONDecodeError:
-                print("Error loading guild data file, returning empty data.")
-                return {}
-        return {}
-
-    def save_guild_data(self, data):
-        with self.tickets_path.open('w') as file:
-            json.dump(data, file, indent=4)
-
     async def check_lottery_on_startup(self):
         await self.bot.wait_until_ready()
-        config = self.load_config()
         now = datetime.utcnow()
-        for guild_id, guild_config in config.items():
-            if 'end_time' in guild_config:
-                end_time = datetime.fromisoformat(guild_config['end_time'])
+        all_guilds = await self.config.all_guilds()
+        for guild_id, guild_config in all_guilds.items():
+            end_time = guild_config.get('end_time')
+            if end_time:
+                end_time = datetime.fromisoformat(end_time)
                 if now < end_time:
                     if guild_id not in self.lottery_running:
                         self.lottery_running.add(guild_id)
                     await self.start_lottery(guild_id, (end_time - now).total_seconds())
                 else:
                     await self.end_lottery(guild_id)
-            elif 'start_time' in guild_config:
-                start_time_str = guild_config['start_time']
-                start_time = datetime.strptime(start_time_str, "%H:%M").replace(year=now.year, month=now.month, day=now.day)
-                if now < start_time:
-                    await asyncio.sleep((start_time - now).total_seconds())
-                    await self.start_lottery(guild_id)
 
     async def start_lottery(self, guild_id, duration=LOTTERY_DURATION):
-        config = self.load_config()
-        guild_config = config.get(str(guild_id), {})
-
-        if 'end_time' not in guild_config:
+        guild = self.bot.get_guild(guild_id)
+        if not guild:
+            return
+        
+        guild_config = await self.config.guild(guild).all()
+        end_time = guild_config.get('end_time')
+        if not end_time:
             start_time = datetime.utcnow()
             end_time = start_time + timedelta(seconds=duration)
-            guild_config['end_time'] = end_time.isoformat()
-            config[str(guild_id)] = guild_config
-            self.save_config(config)
-
+            await self.config.guild(guild).end_time.set(end_time.isoformat())
             channel_id = guild_config.get('channel_id')
             if channel_id:
-                channel = self.bot.get_channel(int(channel_id))
+                channel = self.bot.get_channel(channel_id)
                 if channel:
                     start_embed = discord.Embed(
                         title="Lottery Started!",
@@ -102,59 +76,58 @@ class Lottery(commands.Cog):
         else:
             channel_id = guild_config.get('channel_id')
             if channel_id:
-                channel = self.bot.get_channel(int(channel_id))
+                channel = self.bot.get_channel(channel_id)
                 if channel:
                     await channel.send("Lottery is already running!")
 
     async def end_lottery(self, guild_id):
+        guild = self.bot.get_guild(guild_id)
+        if not guild:
+            return
+        
         if guild_id in self.lottery_running:
             self.lottery_running.remove(guild_id)
-        config = self.load_config()
-        guild_config = config.get(str(guild_id), {})
-        if 'end_time' in guild_config:
-            del guild_config['end_time']
-            self.save_config(config)
-            winner_id, winner_data, prize_amount = self.draw_winner(guild_id)
-            channel_id = guild_config.get('channel_id')
 
-            if channel_id:
-                channel = self.bot.get_channel(int(channel_id))
-                if winner_id and channel:
-                    winner = await self.bot.fetch_user(int(winner_id))
-                    winner_embed = discord.Embed(
-                        title="Lottery Winner!",
-                        description=f'Congratulations {winner.mention}, you have won the lottery with one of your tickets! You have won {prize_amount} coins!',
-                        color=discord.Color.gold()
-                    )
-                    winner_embed.set_thumbnail(url=winner.avatar.url)
-                    winner_embed.set_footer(text="Built by renivier")
-                    await channel.send(embed=winner_embed)
+        await self.config.guild(guild).end_time.clear()
+        winner_id, winner_data, prize_amount = await self.draw_winner(guild_id)
+        guild_config = await self.config.guild(guild).all()
+        channel_id = guild_config.get('channel_id')
 
-                    end_embed = discord.Embed(
-                        title="Lottery Ended",
-                        description="The lottery has ended and the winner has been drawn! You can now donate for the next round.",
-                        color=discord.Color.purple()
-                    )
-                    end_embed.set_footer(text="Built by renivier")
-                    await channel.send(embed=end_embed)
-                else:
-                    no_tickets_embed = discord.Embed(
-                        title="No Tickets Purchased",
-                        description="No tickets were purchased in this lottery round.",
-                        color=discord.Color.red()
-                    )
-                    no_tickets_embed.set_footer(text="Built by renivier")
-                    await channel.send(embed=no_tickets_embed)
+        if channel_id:
+            channel = self.bot.get_channel(channel_id)
+            if winner_id and channel:
+                winner = await self.bot.fetch_user(int(winner_id))
+                winner_embed = discord.Embed(
+                    title="Lottery Winner!",
+                    description=f'Congratulations {winner.mention}, you have won the lottery with one of your tickets! You have won {prize_amount} coins!',
+                    color=discord.Color.gold()
+                )
+                winner_embed.set_thumbnail(url=winner.avatar.url)
+                winner_embed.set_footer(text="Built by renivier")
+                await channel.send(embed=winner_embed)
 
-    def draw_winner(self, guild_id):
-        data = self.load_guild_data()
+                end_embed = discord.Embed(
+                    title="Lottery Ended",
+                    description="The lottery has ended and the winner has been drawn! You can now donate for the next round.",
+                    color=discord.Color.purple()
+                )
+                end_embed.set_footer(text="Built by renivier")
+                await channel.send(embed=end_embed)
+            else:
+                no_tickets_embed = discord.Embed(
+                    title="No Tickets Purchased",
+                    description="No tickets were purchased in this lottery round.",
+                    color=discord.Color.red()
+                )
+                no_tickets_embed.set_footer(text="Built by renivier")
+                await channel.send(embed=no_tickets_embed)
+
+    async def draw_winner(self, guild_id):
+        guild_data = await self.tickets.guild_from_id(guild_id).tickets()
         ticket_pool = []
         total_donations = 0
 
-        if guild_id not in data:
-            return None, None, 0
-
-        for user_id, user_data in data[guild_id].items():
+        for user_id, user_data in guild_data.items():
             ticket_pool.extend([user_id] * user_data['tickets'])
             total_donations += user_data['donation']
 
@@ -163,22 +136,20 @@ class Lottery(commands.Cog):
 
         winning_ticket = random.choice(ticket_pool)
         winner_id = winning_ticket
-        winner_data = data[guild_id][winner_id]
+        winner_data = guild_data[winner_id]
 
         prize_amount = int(total_donations * 0.89)
 
         return winner_id, winner_data, prize_amount
 
     @commands.command()
+    @commands.guild_only()
     async def set_lottery_channel(self, ctx):
-        config = self.load_config()
-        guild_config = config.get(str(ctx.guild.id), {})
-        guild_config['channel_id'] = ctx.channel.id
-        config[str(ctx.guild.id)] = guild_config
-        self.save_config(config)
+        await self.config.guild(ctx.guild).channel_id.set(ctx.channel.id)
         await ctx.send(f'This channel has been set for the lottery!')
 
     @commands.command()
+    @commands.guild_only()
     async def set_lottery_time(self, ctx, start_time: str):
         try:
             datetime.strptime(start_time, "%H:%M")
@@ -186,11 +157,7 @@ class Lottery(commands.Cog):
             await ctx.send("Invalid time format! Please provide the time in HH:MM format.")
             return
 
-        config = self.load_config()
-        guild_config = config.get(str(ctx.guild.id), {})
-        guild_config['start_time'] = start_time
-        config[str(ctx.guild.id)] = guild_config
-        self.save_config(config)
+        await self.config.guild(ctx.guild).start_time.set(start_time)
         await ctx.send(f'The lottery start time has been set to {start_time}!')
 
         now = datetime.utcnow()
@@ -204,11 +171,10 @@ class Lottery(commands.Cog):
         if message.author == self.bot.user:
             return
 
-        config = self.load_config()
-        guild_id = str(message.guild.id)
-        channel_id = config.get(guild_id, {}).get('channel_id')
+        guild_config = await self.config.guild(message.guild).all()
+        channel_id = guild_config.get('channel_id')
 
-        if channel_id and message.channel.id == int(channel_id):
+        if channel_id and message.channel.id == channel_id:
             if message.author.id == ELEMENT_BOT_ID and message.embeds:
                 embed = message.embeds[0].to_dict()
                 description = embed.get('description', '')
@@ -226,7 +192,7 @@ class Lottery(commands.Cog):
                     if message.mentions:
                         user = message.mentions[0]
                         tickets = amount_donated // 10000
-                        total_tickets = self.add_tickets(guild_id, user, tickets)
+                        total_tickets = await self.add_tickets(message.guild.id, user.id, tickets)
 
                         ticket_embed = discord.Embed(
                             title="Tickets Received",
@@ -236,25 +202,20 @@ class Lottery(commands.Cog):
                         ticket_embed.set_footer(text="Built by renivier")
                         await message.channel.send(embed=ticket_embed)
 
-        await self.bot.process_commands(message)
+    async def add_tickets(self, guild_id, user_id, tickets):
+        guild_data = await self.tickets.guild_from_id(guild_id).tickets()
 
-    def add_tickets(self, guild_id, user, tickets):
-        data = self.load_guild_data()
+        if user_id not in guild_data:
+            guild_data[user_id] = {'tickets': 0, 'donation': 0}
 
-        if guild_id not in data:
-            data[guild_id] = {}
+        guild_data[user_id]['tickets'] += tickets
+        guild_data[user_id]['donation'] += tickets * 10000  # Each ticket costs 10,000 coins
 
-        user_id = str(user.id)
-        if user_id not in data[guild_id]:
-            data[guild_id][user_id] = {'tickets': 0, 'donation': 0}
-
-        data[guild_id][user_id]['tickets'] += tickets
-        data[guild_id][user_id]['donation'] += tickets * 10000  # Each ticket costs 10,000 coins
-
-        self.save_guild_data(data)
-        return data[guild_id][user_id]['tickets']
+        await self.tickets.guild_from_id(guild_id).tickets.set(guild_data)
+        return guild_data[user_id]['tickets']
 
     @commands.command()
+    @commands.guild_only()
     async def start_lottery_now(self, ctx):
         if ctx.author.guild_permissions.administrator:
             await self.start_lottery(ctx.guild.id)
@@ -263,6 +224,7 @@ class Lottery(commands.Cog):
             await ctx.send("You do not have permission to start the lottery.")
 
     @commands.command()
+    @commands.guild_only()
     async def end_lottery_now(self, ctx):
         if ctx.author.guild_permissions.administrator:
             await self.end_lottery(ctx.guild.id)
