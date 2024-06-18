@@ -2,7 +2,6 @@ import discord
 from discord.ext import commands
 from redbot.core import commands, Config
 import random
-import json
 import asyncio
 from datetime import datetime, timedelta
 
@@ -123,7 +122,7 @@ class Lottery(commands.Cog):
                 await channel.send(embed=no_tickets_embed)
 
     async def draw_winner(self, guild_id):
-        guild_data = await self.tickets.guild_from_id(guild_id).tickets()
+        guild_data = await self.tickets.guild(guild_id).tickets()
         ticket_pool = []
         total_donations = 0
 
@@ -203,7 +202,7 @@ class Lottery(commands.Cog):
                         await message.channel.send(embed=ticket_embed)
 
     async def add_tickets(self, guild_id, user_id, tickets):
-        guild_data = await self.tickets.guild_from_id(guild_id).tickets()
+        guild_data = await self.tickets.guild(guild_id).tickets()
 
         if user_id not in guild_data:
             guild_data[user_id] = {'tickets': 0, 'donation': 0}
@@ -211,7 +210,7 @@ class Lottery(commands.Cog):
         guild_data[user_id]['tickets'] += tickets
         guild_data[user_id]['donation'] += tickets * 10000  # Each ticket costs 10,000 coins
 
-        await self.tickets.guild_from_id(guild_id).tickets.set(guild_data)
+        await self.tickets.guild(guild_id).tickets.set(guild_data)
         return guild_data[user_id]['tickets']
 
     @commands.command()
