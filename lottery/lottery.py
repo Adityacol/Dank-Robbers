@@ -8,7 +8,7 @@ import json
 import pathlib
 
 ELEMENT_BOT_ID = 957635842631950379
-LOTTERY_DURATION = 60 * 5  # 5 minutes for testing
+LOTTERY_DURATION = 60 * 60 * 24  # 5 minutes for testing
 
 class Lottery(commands.Cog):
     def __init__(self, bot):
