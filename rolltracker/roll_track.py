@@ -86,91 +86,91 @@ class RollTrack(commands.Cog):
 
     def get_prize_and_quantity(self, roll_number):
         if roll_number == 1:
-            return "Grand Prize - 2x Universe Box :uni:", 2
+            return "Grand Prize - 2x Universe Box", 2
         elif 2 <= roll_number <= 499:
-            return "25x Adventure Ticket :adv_ticket:", 25
+            return "25x Adventure Ticket", 25
         elif roll_number == 500:
-            return "1x Fool's Notif :fool:", 1
+            return "1x Fool's Notif", 1
         elif 501 <= roll_number <= 999:
-            return "50x Cookie :cookie~1:", 50
+            return "50x Cookie", 50
         elif roll_number == 1000:
-            return "2x Daily Box :daily:", 2
+            return "2x Daily Box", 2
         elif 1001 <= roll_number <= 1499:
-            return "3x Worm :worm~1:", 3
+            return "3x Worm", 3
         elif roll_number == 1500:
-            return "1x Pet Food :pet_food:", 1
+            return "1x Pet Food", 1
         elif 1501 <= roll_number <= 1999:
-            return "1x Metal Pipe :blowpipe:", 1
+            return "1x Metal Pipe", 1
         elif roll_number == 2000:
-            return "10x Pepe Coin :pepecoin:", 10
+            return "10x Pepe Coin", 10
         elif 2001 <= roll_number <= 2499:
-            return "10x Life saver :lifesave:", 10
+            return "10x Life saver", 10
         elif roll_number == 2500:
             return "1x Dmc", 1
         elif 2501 <= roll_number <= 2999:
-            return "50x Ant :ant~1:", 50
+            return "50x Ant", 50
         elif roll_number == 3000:
-            return "2x Daily Box :daily:", 2
+            return "2x Daily Box", 2
         elif 3001 <= roll_number <= 3332:
-            return "20x Worm :worm~1:", 20
+            return "20x Worm", 20
         elif roll_number == 3333:
             return "333,333,333 Dmc", 333333333
         elif 3334 <= roll_number <= 3499:
-            return "10x Bean seed :bean:", 10
+            return "10x Bean seed", 10
         elif roll_number == 3500:
-            return "100x Cell phone :cellphone:", 100
+            return "100x Cell phone", 100
         elif 3501 <= roll_number <= 3999:
-            return "25x Adventure Ticket :adv_ticket:", 25
+            return "25x Adventure Ticket", 25
         elif roll_number == 4000:
-            return "2x Daily Box :daily:", 2
+            return "2x Daily Box", 2
         elif 4001 <= roll_number <= 4499:
-            return "50x Cookie :cookie~1:", 50
+            return "50x Cookie", 50
         elif roll_number == 4500:
-            return "2x Ammo :ammo:", 2
+            return "2x Ammo", 2
         elif 4501 <= roll_number <= 4999:
-            return "50x Ant :ant~1:", 50
+            return "50x Ant", 50
         elif roll_number == 5000:
-            return "1x Pepe Crown :DG_pepecrown:", 1
+            return "1x Pepe Crown", 1
         elif 5001 <= roll_number <= 5499:
-            return "10x New Year Popper :newyear:", 10
+            return "10x New Year Popper", 10
         elif roll_number == 5500:
-            return "3x Pet Food :pet_food:", 3
+            return "3x Pet Food", 3
         elif 5501 <= roll_number <= 5999:
-            return "5x Vote Pack :votepack:", 5
+            return "5x Vote Pack", 5
         elif roll_number == 6000:
-            return "1x Cowboy Boot :cowboy~1:", 1
+            return "1x Cowboy Boot", 1
         elif 6001 <= roll_number <= 6499:
-            return "69x Cell Phone :cellphone:", 69
+            return "69x Cell Phone", 69
         elif roll_number == 6500:
-            return "2x Daily Box :daily:", 2
+            return "2x Daily Box", 2
         elif 6501 <= roll_number <= 6999:
-            return "15x Apple :apple~1:", 15
+            return "15x Apple", 15
         elif roll_number == 7000:
-            return "10x Pepe Coin :pepecoin:", 10
+            return "10x Pepe Coin", 10
         elif 7001 <= roll_number <= 7499:
-            return "15x Worm :worm~1:", 15
+            return "15x Worm", 15
         elif roll_number == 7500:
-            return "5x Metal Pipe :blowpipe:", 5
+            return "5x Metal Pipe", 5
         elif 7501 <= roll_number <= 7999:
-            return "29x Padlock :padlock:", 29
+            return "29x Padlock", 29
         elif roll_number == 8000:
-            return "1x Pepe Trophy :tro:", 1
+            return "1x Pepe Trophy", 1
         elif 8001 <= roll_number <= 8499:
             return "8,888,888 Dmc", 8888888
         elif roll_number == 8500:
-            return "3x Pet Food :pet_food:", 3
+            return "3x Pet Food", 3
         elif 8501 <= roll_number <= 8999:
-            return "25x Adventure Ticket :adv_ticket:", 25
+            return "25x Adventure Ticket", 25
         elif roll_number == 9000:
-            return "1x Fool's Notif :fool:", 1
+            return "1x Fool's Notif", 1
         elif 9001 <= roll_number <= 9499:
-            return "60x Cookie :cookie~1:", 60
+            return "60x Cookie", 60
         elif roll_number == 9500:
-            return "1x Credit card :credit:", 1
+            return "1x Credit card", 1
         elif 9501 <= roll_number <= 9998:
-            return "50x Ant :ant~1:", 50
+            return "50x Ant", 50
         elif roll_number == 9999:
-            return "1x Odd eye :DG_odd_eye:", 1
+            return "1x Odd eye", 1
         elif roll_number == 10000:
             return "Grand Prize - 5,000,000,000 Dmc", 5000000000
         else:
