@@ -1,5 +1,5 @@
 import discord
-from redbot.core import commands
+from discord.ext import commands
 from redbot.core.data_manager import cog_data_path
 import random
 import json
@@ -269,6 +269,3 @@ class Lottery(commands.Cog):
             await ctx.send("Lottery ended manually.")
         else:
             await ctx.send("You do not have permission to end the lottery.")
-
-def setup(bot):
-    bot.add_cog(Lottery(bot))
