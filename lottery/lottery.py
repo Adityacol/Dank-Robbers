@@ -122,7 +122,11 @@ class Lottery(commands.Cog):
                 await channel.send(embed=no_tickets_embed)
 
     async def draw_winner(self, guild_id):
-        guild_data = await self.tickets.guild(guild_id).tickets()
+        guild = self.bot.get_guild(guild_id)
+        if not guild:
+            return None, None, 0
+        
+        guild_data = await self.tickets.guild(guild).tickets()
         ticket_pool = []
         total_donations = 0
 
@@ -170,7 +174,8 @@ class Lottery(commands.Cog):
         if message.author == self.bot.user:
             return
 
-        guild_config = await self.config.guild(message.guild).all()
+        guild = message.guild
+        guild_config = await self.config.guild(guild).all()
         channel_id = guild_config.get('channel_id')
 
         if channel_id and message.channel.id == channel_id:
@@ -191,7 +196,7 @@ class Lottery(commands.Cog):
                     if message.mentions:
                         user = message.mentions[0]
                         tickets = amount_donated // 10000
-                        total_tickets = await self.add_tickets(message.guild.id, user.id, tickets)
+                        total_tickets = await self.add_tickets(guild, user.id, tickets)
 
                         ticket_embed = discord.Embed(
                             title="Tickets Received",
@@ -201,8 +206,8 @@ class Lottery(commands.Cog):
                         ticket_embed.set_footer(text="Built by renivier")
                         await message.channel.send(embed=ticket_embed)
 
-    async def add_tickets(self, guild_id, user_id, tickets):
-        guild_data = await self.tickets.guild(guild_id).tickets()
+    async def add_tickets(self, guild, user_id, tickets):
+        guild_data = await self.tickets.guild(guild).tickets()
 
         if user_id not in guild_data:
             guild_data[user_id] = {'tickets': 0, 'donation': 0}
@@ -210,7 +215,7 @@ class Lottery(commands.Cog):
         guild_data[user_id]['tickets'] += tickets
         guild_data[user_id]['donation'] += tickets * 10000  # Each ticket costs 10,000 coins
 
-        await self.tickets.guild(guild_id).tickets.set(guild_data)
+        await self.tickets.guild(guild).tickets.set(guild_data)
         return guild_data[user_id]['tickets']
 
     @commands.command()
