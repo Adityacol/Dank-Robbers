@@ -1,4 +1,5 @@
 import discord
+from discord.ext import commands
 from redbot.core import commands, Config, data_manager
 import random
 import asyncio
@@ -18,6 +19,7 @@ class Lottery(commands.Cog):
             start_time=None
         )
         self.tickets_path = data_manager.cog_data_path(self) / "guild_tickets.json"
+        print(f"Tickets path: {self.tickets_path}")
         self.lottery_running = set()
         self.bot.loop.create_task(self.check_lottery_on_startup())
 
@@ -119,6 +121,7 @@ class Lottery(commands.Cog):
 
     async def draw_winner(self, guild):
         guild_data = self.load_guild_data()
+        print(f"Guild Data Before Draw: {guild_data}")
         if str(guild.id) not in guild_data:
             return None, None, 0
 
@@ -140,12 +143,15 @@ class Lottery(commands.Cog):
 
         # Clear the guild_tickets.json file
         self.clear_guild_tickets()
+        print(f"Guild Data After Draw: {self.load_guild_data()}")
 
         return winner_id, winner_data, prize_amount
 
     def clear_guild_tickets(self):
+        print("Clearing guild tickets...")
         with self.tickets_path.open('w') as f:
             json.dump({}, f, indent=4)
+        print(f"Contents of {self.tickets_path} after clearing: {self.load_guild_data()}")
 
     @commands.command()
     @commands.guild_only()
@@ -210,6 +216,7 @@ class Lottery(commands.Cog):
 
     async def add_tickets(self, guild, user, tickets):
         guild_data = self.load_guild_data()
+        print(f"Guild Data Before Adding Tickets: {guild_data}")
 
         if str(guild.id) not in guild_data:
             guild_data[str(guild.id)] = {}
@@ -226,17 +233,23 @@ class Lottery(commands.Cog):
         guild_data[str(guild.id)][str(user.id)]['donation'] += tickets * 10000  # Each ticket costs 10,000 coins
 
         self.save_guild_data(guild_data)
+        print(f"Guild Data After Adding Tickets: {guild_data}")
         return guild_data[str(guild.id)][str(user.id)]['tickets']
 
     def load_guild_data(self):
+        print(f"Loading guild data from {self.tickets_path}")
         if self.tickets_path.exists():
             with self.tickets_path.open('r') as f:
-                return json.load(f)
+                data = json.load(f)
+                print(f"Data loaded: {data}")
+                return data
         return {}
 
     def save_guild_data(self, data):
+        print(f"Saving guild data to {self.tickets_path}")
         with self.tickets_path.open('w') as f:
             json.dump(data, f, indent=4)
+        print(f"Data saved: {data}")
 
     @commands.command()
     @commands.guild_only()
