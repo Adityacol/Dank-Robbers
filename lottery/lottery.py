@@ -1,14 +1,12 @@
 import discord
-from redbot.core import commands
 from redbot.core import commands, Config, data_manager
 import random
 import asyncio
 from datetime import datetime, timedelta
 import json
-import pathlib
 
 ELEMENT_BOT_ID = 957635842631950379
-LOTTERY_DURATION = 60 * 60 * 24  # 5 minutes for testing
+LOTTERY_DURATION = 60 * 5  # 5 minutes for testing
 
 class Lottery(commands.Cog):
     def __init__(self, bot):
@@ -140,7 +138,14 @@ class Lottery(commands.Cog):
 
         prize_amount = int(total_donations * 0.89)
 
+        # Clear the guild_tickets.json file
+        self.clear_guild_tickets()
+
         return winner_id, winner_data, prize_amount
+
+    def clear_guild_tickets(self):
+        with self.tickets_path.open('w') as f:
+            json.dump({}, f, indent=4)
 
     @commands.command()
     @commands.guild_only()
