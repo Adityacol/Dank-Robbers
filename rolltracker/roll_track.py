@@ -65,7 +65,9 @@ class RollTrack(commands.Cog):
             if content:
                 roll_number = self.extract_roll_number(content)
                 winner_username = self.extract_winner_username(content)
-                if roll_number is not None and winner_username:
+                if roll_number != 10000:
+                    await self.send_cancellation_message(message, roll_number)
+                elif roll_number is not None and winner_username:
                     prize, quantity = self.get_prize_and_quantity(roll_number)
                     await self.send_winner_message(winner_username, roll_number, prize, quantity, message.created_at)
                     await self.reply_to_tracked_message(message, winner_username, prize, quantity)
@@ -156,16 +158,16 @@ class RollTrack(commands.Cog):
         elif roll_number == 8000:
             return "Pepe Trophy", 1
         elif 8001 <= roll_number <= 8499:
-            return "Dmc", 3333333
-        elif 8500:
+            return "Dmc", 8888888
+        elif roll_number == 8500:
             return "Pet Food", 3
         elif 8501 <= roll_number <= 8999:
             return "Adventure Ticket", 25
-        elif 9000:
+        elif roll_number == 9000:
             return "Fool's Notif", 1
         elif 9001 <= roll_number <= 9499:
             return "Cookie", 60
-        elif 9500:
+        elif roll_number == 9500:
             return "Credit card", 1
         elif 9501 <= roll_number <= 9998:
             return "Ant", 50
@@ -175,6 +177,14 @@ class RollTrack(commands.Cog):
             return "Grand Prize - 5,000,000,000", 1
         else:
             return "Unknown prize", 1
+
+    async def send_cancellation_message(self, message, roll_number):
+        reply_embed = discord.Embed(
+            description=f"Your roll of {roll_number} has been canceled because it is not the correct amount of 10000.",
+            color=discord.Color.red()
+        )
+        reply_embed.set_footer(text="Roll Event • Roll canceled")
+        await message.reply(embed=reply_embed)
 
     async def send_winner_message(self, winner_username, roll_number, prize, quantity, message_timestamp):
         target_channel = self.bot.get_channel(self.target_channel_id)
