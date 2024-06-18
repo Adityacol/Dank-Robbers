@@ -1,9 +1,11 @@
 import discord
-from redbot.core import commands
-from redbot.core import commands, Config
+from discord.ext import commands
+from redbot.core import commands, Config, data_manager
 import random
 import asyncio
 from datetime import datetime, timedelta
+import json
+import pathlib
 
 ELEMENT_BOT_ID = 957635842631950379
 LOTTERY_DURATION = 60 * 5  # 5 minutes for testing
@@ -17,10 +19,7 @@ class Lottery(commands.Cog):
             end_time=None,
             start_time=None
         )
-        self.tickets = Config.get_conf(self, identifier=1234567891, force_registration=True)
-        self.tickets.register_guild(
-            tickets={}
-        )
+        self.tickets_path = data_manager.cog_data_path(self) / "guild_tickets.json"
         self.lottery_running = set()
         self.bot.loop.create_task(self.check_lottery_on_startup())
 
@@ -36,14 +35,14 @@ class Lottery(commands.Cog):
             if end_time:
                 end_time = datetime.fromisoformat(end_time)
                 if now < end_time:
-                    if guild_id not in self.lottery_running:
+                    guild = self.bot.get_guild(guild_id)
+                    if guild and guild_id not in self.lottery_running:
                         self.lottery_running.add(guild_id)
-                    await self.start_lottery(guild_id, (end_time - now).total_seconds())
+                    await self.start_lottery(guild, (end_time - now).total_seconds())
                 else:
-                    await self.end_lottery(guild_id)
+                    await self.end_lottery(guild)
 
-    async def start_lottery(self, guild_id, duration=LOTTERY_DURATION):
-        guild = self.bot.get_guild(guild_id)
+    async def start_lottery(self, guild, duration=LOTTERY_DURATION):
         if not guild:
             return
         
@@ -71,7 +70,7 @@ class Lottery(commands.Cog):
                     await channel.send(embed=start_embed)
 
             await asyncio.sleep(duration)
-            await self.end_lottery(guild_id)
+            await self.end_lottery(guild)
         else:
             channel_id = guild_config.get('channel_id')
             if channel_id:
@@ -79,16 +78,15 @@ class Lottery(commands.Cog):
                 if channel:
                     await channel.send("Lottery is already running!")
 
-    async def end_lottery(self, guild_id):
-        guild = self.bot.get_guild(guild_id)
+    async def end_lottery(self, guild):
         if not guild:
             return
         
-        if guild_id in self.lottery_running:
-            self.lottery_running.remove(guild_id)
+        if guild.id in self.lottery_running:
+            self.lottery_running.remove(guild.id)
 
         await self.config.guild(guild).end_time.clear()
-        winner_id, winner_data, prize_amount = await self.draw_winner(guild_id)
+        winner_id, winner_data, prize_amount = await self.draw_winner(guild)
         guild_config = await self.config.guild(guild).all()
         channel_id = guild_config.get('channel_id')
 
@@ -121,16 +119,15 @@ class Lottery(commands.Cog):
                 no_tickets_embed.set_footer(text="Built by renivier")
                 await channel.send(embed=no_tickets_embed)
 
-    async def draw_winner(self, guild_id):
-        guild = self.bot.get_guild(guild_id)
-        if not guild:
+    async def draw_winner(self, guild):
+        guild_data = self.load_guild_data()
+        if str(guild.id) not in guild_data:
             return None, None, 0
-        
-        guild_data = await self.tickets.guild(guild).tickets()
+
         ticket_pool = []
         total_donations = 0
 
-        for user_id, user_data in guild_data.items():
+        for user_id, user_data in guild_data[str(guild.id)].items():
             ticket_pool.extend([user_id] * user_data['tickets'])
             total_donations += user_data['donation']
 
@@ -139,7 +136,7 @@ class Lottery(commands.Cog):
 
         winning_ticket = random.choice(ticket_pool)
         winner_id = winning_ticket
-        winner_data = guild_data[winner_id]
+        winner_data = guild_data[str(guild.id)][winner_id]
 
         prize_amount = int(total_donations * 0.89)
 
@@ -167,7 +164,7 @@ class Lottery(commands.Cog):
         start_time_dt = datetime.strptime(start_time, "%H:%M").replace(year=now.year, month=now.month, day=now.day)
         if now < start_time_dt:
             await asyncio.sleep((start_time_dt - now).total_seconds())
-            await self.start_lottery(ctx.guild.id)
+            await self.start_lottery(ctx.guild, (start_time_dt - now).total_seconds())
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -196,7 +193,7 @@ class Lottery(commands.Cog):
                     if message.mentions:
                         user = message.mentions[0]
                         tickets = amount_donated // 10000
-                        total_tickets = await self.add_tickets(guild, user.id, tickets)
+                        total_tickets = await self.add_tickets(guild, user, tickets)
 
                         ticket_embed = discord.Embed(
                             title="Tickets Received",
@@ -206,23 +203,41 @@ class Lottery(commands.Cog):
                         ticket_embed.set_footer(text="Built by renivier")
                         await message.channel.send(embed=ticket_embed)
 
-    async def add_tickets(self, guild, user_id, tickets):
-        guild_data = await self.tickets.guild(guild).tickets()
+    async def add_tickets(self, guild, user, tickets):
+        guild_data = self.load_guild_data()
 
-        if user_id not in guild_data:
-            guild_data[user_id] = {'tickets': 0, 'donation': 0}
+        if str(guild.id) not in guild_data:
+            guild_data[str(guild.id)] = {}
 
-        guild_data[user_id]['tickets'] += tickets
-        guild_data[user_id]['donation'] += tickets * 10000  # Each ticket costs 10,000 coins
+        if str(user.id) not in guild_data[str(guild.id)]:
+            guild_data[str(guild.id)][str(user.id)] = {
+                'tickets': 0,
+                'donation': 0,
+                'username': user.name,
+                'guild_id': str(guild.id)
+            }
 
-        await self.tickets.guild(guild).tickets.set(guild_data)
-        return guild_data[user_id]['tickets']
+        guild_data[str(guild.id)][str(user.id)]['tickets'] += tickets
+        guild_data[str(guild.id)][str(user.id)]['donation'] += tickets * 10000  # Each ticket costs 10,000 coins
+
+        self.save_guild_data(guild_data)
+        return guild_data[str(guild.id)][str(user.id)]['tickets']
+
+    def load_guild_data(self):
+        if self.tickets_path.exists():
+            with self.tickets_path.open('r') as f:
+                return json.load(f)
+        return {}
+
+    def save_guild_data(self, data):
+        with self.tickets_path.open('w') as f:
+            json.dump(data, f, indent=4)
 
     @commands.command()
     @commands.guild_only()
     async def start_lottery_now(self, ctx):
         if ctx.author.guild_permissions.administrator:
-            await self.start_lottery(ctx.guild.id)
+            await self.start_lottery(ctx.guild)
             await ctx.send("Lottery started manually.")
         else:
             await ctx.send("You do not have permission to start the lottery.")
@@ -231,7 +246,7 @@ class Lottery(commands.Cog):
     @commands.guild_only()
     async def end_lottery_now(self, ctx):
         if ctx.author.guild_permissions.administrator:
-            await self.end_lottery(ctx.guild.id)
+            await self.end_lottery(ctx.guild)
             await ctx.send("Lottery ended manually.")
         else:
             await ctx.send("You do not have permission to end the lottery.")
