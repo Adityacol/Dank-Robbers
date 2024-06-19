@@ -61,15 +61,11 @@ class RollTrack(commands.Cog):
             elif message.embeds:
                 embed = message.embeds[0]
                 content = embed.title
-                description = embed.description
 
-            if content and description:
+            if content:
                 roll_number = self.extract_roll_number(content)
                 winner_username = self.extract_winner_username(content)
-                roll_range = self.extract_roll_range(description)
-                if roll_range != "1-10000":
-                    await self.send_cancellation_message(message, roll_number, roll_range)
-                elif roll_number is not None and winner_username:
+                if roll_number is not None and winner_username:
                     prize, quantity = self.get_prize_and_quantity(roll_number)
                     await self.send_winner_message(winner_username, roll_number, prize, quantity, message.created_at)
                     await self.reply_to_tracked_message(message, winner_username, prize, quantity)
@@ -84,13 +80,6 @@ class RollTrack(commands.Cog):
     def extract_winner_username(self, content):
         username_pattern = r'\*\*(\S+)\*\* rolls'
         match = re.search(username_pattern, content)
-        if match:
-            return match.group(1)
-        return None
-
-    def extract_roll_range(self, description):
-        range_pattern = r'\((\d{1,5}-\d{1,5})\)'
-        match = re.search(range_pattern, description)
         if match:
             return match.group(1)
         return None
@@ -144,7 +133,7 @@ class RollTrack(commands.Cog):
             return "Pepe Crown", 1
         elif 5001 <= roll_number <= 5499:
             return "New Year Popper", 10
-        elif 5500:
+        elif roll_number == 5500:
             return "Pet Food", 3
         elif 5501 <= roll_number <= 5999:
             return "Vote Pack", 5
@@ -168,7 +157,7 @@ class RollTrack(commands.Cog):
             return "Pepe Trophy", 1
         elif 8001 <= roll_number <= 8499:
             return "Dmc", 8888888
-        elif roll_number == 8500:
+        elif 8500:
             return "Pet Food", 3
         elif 8501 <= roll_number <= 8999:
             return "Adventure Ticket", 25
@@ -176,7 +165,7 @@ class RollTrack(commands.Cog):
             return "Fool's Notif", 1
         elif 9001 <= roll_number <= 9499:
             return "Cookie", 60
-        elif roll_number == 9500:
+        elif 9500:
             return "Credit card", 1
         elif 9501 <= roll_number <= 9998:
             return "Ant", 50
@@ -186,14 +175,6 @@ class RollTrack(commands.Cog):
             return "Grand Prize - 5,000,000,000", 1
         else:
             return "Unknown prize", 1
-
-    async def send_cancellation_message(self, message, roll_number, roll_range):
-        reply_embed = discord.Embed(
-            description=f"Your roll of {roll_number} has been canceled because it is not the correct amount of 10000.",
-            color=discord.Color.red()
-        )
-        reply_embed.set_footer(text="Roll Event • Roll canceled")
-        await message.reply(embed=reply_embed)
 
     async def send_winner_message(self, winner_username, roll_number, prize, quantity, message_timestamp):
         target_channel = self.bot.get_channel(self.target_channel_id)
