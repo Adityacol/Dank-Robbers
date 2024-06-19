@@ -61,17 +61,18 @@ class RollTrack(commands.Cog):
             elif message.embeds:
                 embed = message.embeds[0]
                 content = embed.title
+                description = embed.description
 
-            if content:
+            if content and description:
                 roll_number = self.extract_roll_number(content)
-                if roll_number != 10000:
-                    await self.send_cancellation_message(message, roll_number)
-                else:
-                    winner_username = self.extract_winner_username(content)
-                    if roll_number is not None and winner_username:
-                        prize, quantity = self.get_prize_and_quantity(roll_number)
-                        await self.send_winner_message(winner_username, roll_number, prize, quantity, message.created_at)
-                        await self.reply_to_tracked_message(message, winner_username, prize, quantity)
+                winner_username = self.extract_winner_username(content)
+                roll_range = self.extract_roll_range(description)
+                if roll_range != "1-10000":
+                    await self.send_cancellation_message(message, roll_number, roll_range)
+                elif roll_number is not None and winner_username:
+                    prize, quantity = self.get_prize_and_quantity(roll_number)
+                    await self.send_winner_message(winner_username, roll_number, prize, quantity, message.created_at)
+                    await self.reply_to_tracked_message(message, winner_username, prize, quantity)
 
     def extract_roll_number(self, content):
         roll_pattern = r'rolls \*\*(\d{1,5})\*\*'
@@ -83,6 +84,13 @@ class RollTrack(commands.Cog):
     def extract_winner_username(self, content):
         username_pattern = r'\*\*(\S+)\*\* rolls'
         match = re.search(username_pattern, content)
+        if match:
+            return match.group(1)
+        return None
+
+    def extract_roll_range(self, description):
+        range_pattern = r'\((\d{1,5}-\d{1,5})\)'
+        match = re.search(range_pattern, description)
         if match:
             return match.group(1)
         return None
@@ -179,9 +187,9 @@ class RollTrack(commands.Cog):
         else:
             return "Unknown prize", 1
 
-    async def send_cancellation_message(self, message, roll_number):
+    async def send_cancellation_message(self, message, roll_number, roll_range):
         reply_embed = discord.Embed(
-            description=f"Your roll of {roll_number} has been canceled because it is not the correct amount of 10000.",
+            description=f"Your roll of {roll_number} has been canceled because the roll range was {roll_range} instead of 1-10000.",
             color=discord.Color.red()
         )
         reply_embed.set_footer(text="Roll Event • Roll canceled")
