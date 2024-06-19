@@ -64,13 +64,14 @@ class RollTrack(commands.Cog):
 
             if content:
                 roll_number = self.extract_roll_number(content)
-                winner_username = self.extract_winner_username(content)
                 if roll_number != 10000:
                     await self.send_cancellation_message(message, roll_number)
-                elif roll_number is not None and winner_username:
-                    prize, quantity = self.get_prize_and_quantity(roll_number)
-                    await self.send_winner_message(winner_username, roll_number, prize, quantity, message.created_at)
-                    await self.reply_to_tracked_message(message, winner_username, prize, quantity)
+                else:
+                    winner_username = self.extract_winner_username(content)
+                    if roll_number is not None and winner_username:
+                        prize, quantity = self.get_prize_and_quantity(roll_number)
+                        await self.send_winner_message(winner_username, roll_number, prize, quantity, message.created_at)
+                        await self.reply_to_tracked_message(message, winner_username, prize, quantity)
 
     def extract_roll_number(self, content):
         roll_pattern = r'rolls \*\*(\d{1,5})\*\*'
