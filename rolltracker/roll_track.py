@@ -144,7 +144,7 @@ class RollTrack(commands.Cog):
             return "Pepe Crown", 1
         elif 5001 <= roll_number <= 5499:
             return "New Year Popper", 10
-        elif roll_number == 5500:
+        elif 5500:
             return "Pet Food", 3
         elif 5501 <= roll_number <= 5999:
             return "Vote Pack", 5
@@ -172,7 +172,7 @@ class RollTrack(commands.Cog):
             return "Pet Food", 3
         elif 8501 <= roll_number <= 8999:
             return "Adventure Ticket", 25
-        elif roll_number == 9000:
+        elif 9000:
             return "Fool's Notif", 1
         elif 9001 <= roll_number <= 9499:
             return "Cookie", 60
@@ -189,7 +189,7 @@ class RollTrack(commands.Cog):
 
     async def send_cancellation_message(self, message, roll_number, roll_range):
         reply_embed = discord.Embed(
-            description=f"Your roll of {roll_number} has been canceled because the roll range was {roll_range} instead of 1-10000.",
+            description=f"Your roll of {roll_number} has been canceled because it is not the correct amount of 10000.",
             color=discord.Color.red()
         )
         reply_embed.set_footer(text="Roll Event • Roll canceled")
