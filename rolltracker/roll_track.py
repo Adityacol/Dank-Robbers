@@ -156,7 +156,7 @@ class RollTrack(commands.Cog):
         elif roll_number == 8000:
             return "Pepe Trophy", 1
         elif 8001 <= roll_number <= 8499:
-            return "Dmc", 8888888
+            return "Dmc", 3333333
         elif 8500:
             return "Pet Food", 3
         elif 8501 <= roll_number <= 8999:
