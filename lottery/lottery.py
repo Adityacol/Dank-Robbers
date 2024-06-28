@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import json
 
 ELEMENT_BOT_ID = 957635842631950379
-LOTTERY_DURATION = 60 * 23.96666667 * 60
+LOTTERY_DURATION = 60 * 60 * 24
 
 class Lottery(commands.Cog):
     def __init__(self, bot):
