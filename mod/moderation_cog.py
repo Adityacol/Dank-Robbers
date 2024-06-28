@@ -1,6 +1,6 @@
 import discord
-from discord.ext import tasks
-from redbot.core import commands, Config, checks
+from discord.ext import commands
+from redbot.core import Config, checks
 import aiohttp
 import logging
 
@@ -52,6 +52,9 @@ class MessageModeration(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
+        self.bot.loop.create_task(self.process_message(message))
+
+    async def process_message(self, message):
         track_channel_id = await self.config.track_channel()
         log_channel_id = await self.config.log_channel()
         api_key = await self.config.api_key()
@@ -105,7 +108,7 @@ class MessageModeration(commands.Cog):
         async with self.session.post(url, headers=headers, json=payload) as response:
             data = await response.json()
             logger.debug(f"API Response: {data}")
-            flagged = any(item['likelihood'] >= 2 for item in data['openai']['items'])  # Lower likelihood threshold for leniency
+            flagged = any(item['likelihood'] >= 2 for item in data['openai']['items'])
             return {
                 "flagged": flagged,
                 "items": data['openai']['items']
