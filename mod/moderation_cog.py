@@ -13,7 +13,7 @@ class MessageModeration(commands.Cog):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=1234567890)
         self.register_defaults()
-        self.session = None
+        self.session = aiohttp.ClientSession()
 
     def register_defaults(self):
         default_global = {
@@ -25,13 +25,9 @@ class MessageModeration(commands.Cog):
 
     async def initialize(self):
         await self.bot.wait_until_ready()
-        self.session = aiohttp.ClientSession()
-        self.moderate_message.start()
 
     def cog_unload(self):
-        self.moderate_message.cancel()
-        if self.session:
-            self.bot.loop.create_task(self.session.close())
+        self.bot.loop.create_task(self.session.close())
 
     @commands.command()
     @checks.is_owner()
@@ -56,9 +52,6 @@ class MessageModeration(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        self.bot.loop.create_task(self.process_message(message))
-
-    async def process_message(self, message):
         track_channel_id = await self.config.track_channel()
         log_channel_id = await self.config.log_channel()
         api_key = await self.config.api_key()
@@ -112,7 +105,7 @@ class MessageModeration(commands.Cog):
         async with self.session.post(url, headers=headers, json=payload) as response:
             data = await response.json()
             logger.debug(f"API Response: {data}")
-            flagged = any(item['likelihood'] >= 2 for item in data['openai']['items'])
+            flagged = any(item['likelihood'] >= 2 for item in data['openai']['items'])  # Lower likelihood threshold for leniency
             return {
                 "flagged": flagged,
                 "items": data['openai']['items']
