@@ -1,6 +1,5 @@
 import discord
-from discord.ext import commands
-from redbot.core import Config, checks
+from redbot.core import commands, Config, checks
 import aiohttp
 import logging
 
@@ -25,30 +24,34 @@ class MessageModeration(commands.Cog):
 
     async def initialize(self):
         await self.bot.wait_until_ready()
+        logger.info("MessageModeration cog initialized.")
 
     def cog_unload(self):
         self.bot.loop.create_task(self.session.close())
 
     @commands.command()
-    @checks.is_owner()
+    @checks.admin_or_permissions(administrator=True)
     async def set_track_channel(self, ctx, channel: discord.TextChannel):
         """Set the channel to track messages."""
         await self.config.track_channel.set(channel.id)
         await ctx.send(f"Tracking messages in {channel.mention}.")
+        logger.info(f"Track channel set to {channel.mention}.")
 
     @commands.command()
-    @checks.is_owner()
+    @checks.admin_or_permissions(administrator=True)
     async def set_log_channel(self, ctx, channel: discord.TextChannel):
         """Set the channel to log moderated messages."""
         await self.config.log_channel.set(channel.id)
         await ctx.send(f"Logging moderated messages in {channel.mention}.")
+        logger.info(f"Log channel set to {channel.mention}.")
 
     @commands.command()
-    @checks.is_owner()
+    @checks.admin_or_permissions(administrator=True)
     async def set_api_key(self, ctx, api_key: str):
         """Set the Eden AI API key."""
         await self.config.api_key.set(api_key)
         await ctx.send("API key set.")
+        logger.info("API key set.")
 
     @commands.Cog.listener()
     async def on_message(self, message):
