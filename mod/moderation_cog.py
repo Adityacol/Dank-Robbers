@@ -30,21 +30,21 @@ class MessageModeration(commands.Cog):
         self.bot.loop.create_task(self.session.close())
 
     @commands.command()
-    @checks.is_owner()
+    @checks.admin_or_permissions(administrator=True)
     async def set_track_channel(self, ctx, channel: discord.TextChannel):
         """Set the channel to track messages."""
         await self.config.track_channel.set(channel.id)
         await ctx.send(f"Tracking messages in {channel.mention}.")
 
     @commands.command()
-    @checks.is_owner()
+    @checks.admin_or_permissions(administrator=True)
     async def set_log_channel(self, ctx, channel: discord.TextChannel):
         """Set the channel to log moderated messages."""
         await self.config.log_channel.set(channel.id)
         await ctx.send(f"Logging moderated messages in {channel.mention}.")
 
     @commands.command()
-    @checks.is_owner()
+    @checks.admin_or_permissions(administrator=True)
     async def set_api_key(self, ctx, api_key: str):
         """Set the Eden AI API key."""
         await self.config.api_key.set(api_key)
@@ -52,6 +52,9 @@ class MessageModeration(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
+        self.bot.loop.create_task(self.process_message(message))
+
+    async def process_message(self, message):
         track_channel_id = await self.config.track_channel()
         log_channel_id = await self.config.log_channel()
         api_key = await self.config.api_key()
