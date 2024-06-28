@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import tasks
 from redbot.core import commands, Config, data_manager
 import random
 import asyncio
@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import json
 
 ELEMENT_BOT_ID = 957635842631950379
-LOTTERY_DURATION = 60 * 5  # 5 minutes for testing
+LOTTERY_DURATION = 60 * 23.96666667 * 60
 
 class Lottery(commands.Cog):
     def __init__(self, bot):
@@ -21,24 +21,39 @@ class Lottery(commands.Cog):
         self.tickets_path = data_manager.cog_data_path(self) / "guild_tickets.json"
         print(f"Tickets path: {self.tickets_path}")
         self.lottery_running = set()
-        self.bot.loop.create_task(self.check_lottery_on_startup())
+        self.start_lottery_task.start()
 
     def cog_unload(self):
+        self.start_lottery_task.cancel()
         print("Lottery cog unloaded")
+
+    @tasks.loop(seconds=60)  # Check every minute
+    async def start_lottery_task(self):
+        now = datetime.utcnow()
+        all_guilds = await self.config.all_guilds()
+        for guild_id, guild_config in all_guilds.items():
+            start_time_str = guild_config.get('start_time')
+            if start_time_str:
+                start_time = datetime.strptime(start_time_str, "%H:%M").replace(year=now.year, month=now.month, day=now.day)
+                if now >= start_time and now < start_time + timedelta(minutes=1):
+                    guild = self.bot.get_guild(int(guild_id))
+                    if guild and guild_id not in self.lottery_running:
+                        self.lottery_running.add(guild_id)
+                        await self.start_lottery(guild)
 
     async def check_lottery_on_startup(self):
         await self.bot.wait_until_ready()
         now = datetime.utcnow()
         all_guilds = await self.config.all_guilds()
         for guild_id, guild_config in all_guilds.items():
-            end_time = guild_config.get('end_time')
-            if end_time:
-                end_time = datetime.fromisoformat(end_time)
+            end_time_str = guild_config.get('end_time')
+            if end_time_str:
+                end_time = datetime.fromisoformat(end_time_str)
                 if now < end_time:
-                    guild = self.bot.get_guild(guild_id)
+                    guild = self.bot.get_guild(int(guild_id))
                     if guild and guild_id not in self.lottery_running:
                         self.lottery_running.add(guild_id)
-                    await self.start_lottery(guild, (end_time - now).total_seconds())
+                        await self.start_lottery(guild, (end_time - now).total_seconds())
                 else:
                     await self.end_lottery(guild)
 
@@ -121,7 +136,7 @@ class Lottery(commands.Cog):
 
     async def draw_winner(self, guild):
         guild_data = self.load_guild_data()
-        print(f"Guild Data Before Draw: {guild_data}")
+        print(f"Guild Data Before Draw: ")
         if str(guild.id) not in guild_data:
             return None, None, 0
 
@@ -171,12 +186,6 @@ class Lottery(commands.Cog):
         await self.config.guild(ctx.guild).start_time.set(start_time)
         await ctx.send(f'The lottery start time has been set to {start_time}!')
 
-        now = datetime.utcnow()
-        start_time_dt = datetime.strptime(start_time, "%H:%M").replace(year=now.year, month=now.month, day=now.day)
-        if now < start_time_dt:
-            await asyncio.sleep((start_time_dt - now).total_seconds())
-            await self.start_lottery(ctx.guild, (start_time_dt - now).total_seconds())
-
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author == self.bot.user:
@@ -216,7 +225,7 @@ class Lottery(commands.Cog):
 
     async def add_tickets(self, guild, user, tickets):
         guild_data = self.load_guild_data()
-        print(f"Guild Data Before Adding Tickets: {guild_data}")
+        print(f"Guild Data Before Adding Tickets:")
 
         if str(guild.id) not in guild_data:
             guild_data[str(guild.id)] = {}
@@ -240,9 +249,13 @@ class Lottery(commands.Cog):
         print(f"Loading guild data from {self.tickets_path}")
         if self.tickets_path.exists():
             with self.tickets_path.open('r') as f:
-                data = json.load(f)
-                print(f"Data loaded: {data}")
-                return data
+                try:
+                    data = json.load(f)
+                    print(f"Data loaded: {data}")
+                    return data
+                except json.JSONDecodeError:
+                    print("Error decoding JSON file")
+                    return {}
         return {}
 
     def save_guild_data(self, data):
@@ -268,3 +281,5 @@ class Lottery(commands.Cog):
             await ctx.send("Lottery ended manually.")
         else:
             await ctx.send("You do not have permission to end the lottery.")
+async def setup(bot):
+    await bot.add_cog(Lottery(bot))
