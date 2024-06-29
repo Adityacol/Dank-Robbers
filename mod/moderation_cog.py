@@ -35,17 +35,17 @@ class MessageModeration(commands.Cog):
             "log_channel": None,
             "api_key": None,
             "leniency_thresholds": {
-                "HateAndExtremism": 1.0,
-                "HateAndExtremism/threatening": 0.7,
-                "Harassment": 1.0,
-                "Harassment/threatening": 0.7,
-                "Violence": 0.7,
-                "Violence/graphic": 0.7,
-                "Self-harm": 0.7,
-                "Self-harm/intent": 0.7,
-                "Self-harm/instructions": 0.7,
-                "Sexual": 1.1,
-                "Sexual/minors": 0.5
+                "HateAndExtremism": 0.5,
+                "HateAndExtremism/threatening": 0.4,
+                "Harassment": 0.8,
+                "Harassment/threatening": 0.4,
+                "Violence": 0.4,
+                "Violence/graphic": 0.4,
+                "Self-harm": 0.4,
+                "Self-harm/intent": 0.4,
+                "Self-harm/instructions": 0.4,
+                "Sexual": 0.8,
+                "Sexual/minors": 0.2
             }
         }
         self.config.register_global(**default_global)
