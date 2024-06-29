@@ -1,5 +1,4 @@
 import discord
-from discord.ext import tasks
 from redbot.core import commands, Config, checks
 import aiohttp
 import logging
@@ -13,7 +12,7 @@ class MessageModeration(commands.Cog):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=1234567890)
         self.register_defaults()
-        self.session = aiohttp.ClientSession()
+        self.session = None
 
     def register_defaults(self):
         default_global = {
@@ -25,9 +24,12 @@ class MessageModeration(commands.Cog):
 
     async def initialize(self):
         await self.bot.wait_until_ready()
+        self.session = aiohttp.ClientSession()
+        logger.info("MessageModeration cog initialized.")
 
     def cog_unload(self):
-        self.bot.loop.create_task(self.session.close())
+        if self.session:
+            self.bot.loop.create_task(self.session.close())
 
     @commands.command()
     @checks.admin_or_permissions(administrator=True)
@@ -49,6 +51,7 @@ class MessageModeration(commands.Cog):
         """Set the Eden AI API key."""
         await self.config.api_key.set(api_key)
         await ctx.send("API key set.")
+        logger.info("API key set.")
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -80,15 +83,33 @@ class MessageModeration(commands.Cog):
         logger.debug(f"Processing message: {message.content}")
         analysis = await self.analyze_message(cleaned_content, api_key)
         logger.debug(f"Analysis result: {analysis}")
-        if analysis.get("flagged"):
-            categories = ', '.join([item['category'] for item in analysis['items'] if item['likelihood'] >= 2])
-            if categories:
-                await log_channel.send(
-                    f"Message from {message.author.mention} flagged for moderation:\n"
-                    f"Content: {message.content}\n"
-                    f"Categories: {categories}"
-                )
-                await message.delete()
+
+        leniency_thresholds = {
+            "hate": 0.6,
+            "hate/threatening": 0.4,
+            "harassment": 0.7,
+            "harassment/threatening": 0.5,
+            "self-harm": 0.6,
+            "self-harm/intent": 0.4,
+            "self-harm/instructions": 0.3,
+            "sexual": 0.8,
+            "sexual/minors": 0.2,
+            "violence": 0.7,
+            "violence/graphic": 0.5
+        }
+
+        flagged_categories = [
+            item['category'] for item in analysis['items']
+            if item['likelihood'] >= leniency_thresholds.get(item['category'], 1)
+        ]
+
+        if flagged_categories:
+            await log_channel.send(
+                f"Message from {message.author.mention} flagged for moderation:\n"
+                f"Content: {message.content}\n"
+                f"Categories: {', '.join(flagged_categories)}"
+            )
+            await message.delete()
 
     def clean_content(self, content):
         return ' '.join(word for word in content.split() if not word.startswith(':'))
@@ -108,11 +129,7 @@ class MessageModeration(commands.Cog):
         async with self.session.post(url, headers=headers, json=payload) as response:
             data = await response.json()
             logger.debug(f"API Response: {data}")
-            flagged = any(item['likelihood'] >= 2 for item in data['openai']['items'])  # Lower likelihood threshold for leniency
-            return {
-                "flagged": flagged,
-                "items": data['openai']['items']
-            }
+            return data['openai'][0] if 'openai' in data and data['openai'] else {'flagged': False, 'items': []}
 
 async def setup(bot):
     cog = MessageModeration(bot)
