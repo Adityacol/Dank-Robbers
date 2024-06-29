@@ -1,7 +1,6 @@
 import discord
 from redbot.core import commands, Config, checks
 import aiohttp
-import asyncio
 import logging
 import json
 
@@ -15,7 +14,6 @@ class MessageModeration(commands.Cog):
         self.config = Config.get_conf(self, identifier=1234567890)
         self.register_defaults()
         self.session = None
-        self.cache = {}
 
     def register_defaults(self):
         default_global = {
@@ -27,7 +25,7 @@ class MessageModeration(commands.Cog):
 
     async def initialize(self):
         await self.bot.wait_until_ready()
-        self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))
+        self.session = aiohttp.ClientSession()
         logger.info("MessageModeration cog initialized.")
 
     def cog_unload(self):
@@ -58,50 +56,52 @@ class MessageModeration(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.bot:
-            return
+        self.bot.loop.create_task(self.process_message(message))
 
+    async def process_message(self, message):
         track_channel_id = await self.config.track_channel()
-        if message.channel.id == track_channel_id:
-            cleaned_content = self.clean_content(message.content)
-            if cleaned_content:
-                self.bot.loop.create_task(self.process_message(message, cleaned_content))
-
-    async def process_message(self, message, cleaned_content):
         log_channel_id = await self.config.log_channel()
         api_key = await self.config.api_key()
 
-        if not log_channel_id or not api_key:
-            logger.error("Log channel or API key not set.")
+        if not track_channel_id or not log_channel_id or not api_key:
+            logger.debug("Track channel, log channel, or API key not set.")
             return
 
+        track_channel = self.bot.get_channel(track_channel_id)
         log_channel = self.bot.get_channel(log_channel_id)
-        if not log_channel:
-            logger.error("Log channel not found.")
+
+        if not track_channel or not log_channel:
+            logger.debug("Track channel or log channel not found.")
             return
 
-        analysis = self.cache.get(cleaned_content)
-        if not analysis:
-            analysis = await self.analyze_message(cleaned_content, api_key)
-            self.cache[cleaned_content] = analysis
+        if message.channel.id != track_channel.id or message.author.bot:
+            return
+
+        cleaned_content = self.clean_content(message.content)
+        if not cleaned_content:
+            return
+
+        logger.debug(f"Processing message: {message.content}")
+        analysis = await self.analyze_message(cleaned_content, api_key)
+        logger.debug(f"Analysis result: {analysis}")
 
         leniency_thresholds = {
-            "HateAndExtremism": 1.1,
-            "HateAndExtremism/threatening": 1.1,
-            "Harassment": 1.1,
-            "Harassment/threatening": 1.1,
-            "Violence": 1.1,
-            "Violence/graphic": 1.1,
-            "Self-harm": 1.1,
-            "Self-harm/intent": 1.1,
-            "Self-harm/instructions": 1.1,
-            "Sexual": 1.1,
-            "Sexual/minors": 1.1
+            "HateAndExtremism": 0.7,
+            "HateAndExtremism/threatening": 0.7,
+            "Harassment": 0.7,
+            "Harassment/threatening": 0.7,
+            "Violence": 0.7,
+            "Violence/graphic": 0.7,
+            "Self-harm": 0.7,
+            "Self-harm/intent": 0.7,
+            "Self-harm/instructions": 0.7,
+            "Sexual": 0.7,
+            "Sexual/minors": 0.7
         }
 
         flagged_categories = [
             item['category'] for item in analysis['items']
-            if item['likelihood_score'] >= leniency_thresholds.get(item['category'], 1.1)
+            if item['likelihood_score'] >= leniency_thresholds.get(item['category'], 0.7)
         ]
 
         if flagged_categories:
@@ -113,8 +113,7 @@ class MessageModeration(commands.Cog):
             await message.delete()
 
     def clean_content(self, content):
-        # Ignore words that start and end with ':' (typically emojis)
-        return ' '.join(word for word in content.split() if not (word.startswith(':') and word.endswith(':')))
+        return ' '.join(word for word in content.split() if not word.startswith(':'))
 
     async def analyze_message(self, content, api_key):
         url = "https://api.edenai.run/v2/text/moderation"
@@ -140,10 +139,6 @@ class MessageModeration(commands.Cog):
                 logger.error(f"HTTP request failed: {e}")
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to decode JSON response: {e}")
-            except asyncio.TimeoutError:
-                logger.error("Request timed out.")
-            except RuntimeError as e:
-                logger.error(f"Runtime error: {e}")
 
         return {'flagged': False, 'items': []}  # Return a default value if all retries fail
 
