@@ -86,17 +86,17 @@ class MessageModeration(commands.Cog):
         logger.debug(f"Analysis result: {analysis}")
 
         leniency_thresholds = {
-            "HateAndExtremism": 0.4,
-            "HateAndExtremism/threatening": 0.4,
-            "Harassment": 0.4,
-            "Harassment/threatening": 0.4,
-            "Violence": 0.4,
-            "Violence/graphic": 0.4,
-            "Self-harm": 0.4,
-            "Self-harm/intent": 0.4,
-            "Self-harm/instructions": 0.4,
-            "Sexual": 0.4,
-            "Sexual/minors": 0.4
+            "HateAndExtremism": 1.8,
+            "HateAndExtremism/threatening": 1.4,
+            "Harassment": 1.4,
+            "Harassment/threatening": 1.4,
+            "Violence": 1.4,
+            "Violence/graphic": 1.4,
+            "Self-harm": 1.4,
+            "Self-harm/intent": 1.4,
+            "Self-harm/instructions": 1.4,
+            "Sexual": 1.4,
+            "Sexual/minors": 1.4
         }
 
         flagged_categories = [
