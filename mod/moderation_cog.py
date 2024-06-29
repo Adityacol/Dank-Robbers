@@ -2,6 +2,7 @@ import discord
 from redbot.core import commands, Config, checks
 import aiohttp
 import logging
+import json
 
 logger = logging.getLogger("red.MessageModeration")
 
@@ -83,15 +84,33 @@ class MessageModeration(commands.Cog):
         logger.debug(f"Processing message: {message.content}")
         analysis = await self.analyze_message(cleaned_content, api_key)
         logger.debug(f"Analysis result: {analysis}")
-        if analysis.get("flagged"):
-            categories = ', '.join([item['category'] for item in analysis['items'] if item['likelihood'] >= 2])
-            if categories:
-                await log_channel.send(
-                    f"Message from {message.author.mention} flagged for moderation:\n"
-                    f"Content: {message.content}\n"
-                    f"Categories: {categories}"
-                )
-                await message.delete()
+
+        leniency_thresholds = {
+            "HateAndExtremism": 0.4,
+            "HateAndExtremism/threatening": 0.4,
+            "Harassment": 0.4,
+            "Harassment/threatening": 0.4,
+            "Violence": 0.4,
+            "Violence/graphic": 0.4,
+            "Self-harm": 0.4,
+            "Self-harm/intent": 0.4,
+            "Self-harm/instructions": 0.4,
+            "Sexual": 0.4,
+            "Sexual/minors": 0.4
+        }
+
+        flagged_categories = [
+            item['category'] for item in analysis['items']
+            if item['likelihood_score'] >= leniency_thresholds.get(item['category'], 0.4)
+        ]
+
+        if flagged_categories:
+            await log_channel.send(
+                f"Message from {message.author.mention} flagged for moderation:\n"
+                f"Content: {message.content}\n"
+                f"Categories: {', '.join(flagged_categories)}"
+            )
+            await message.delete()
 
     def clean_content(self, content):
         return ' '.join(word for word in content.split() if not word.startswith(':'))
@@ -108,14 +127,20 @@ class MessageModeration(commands.Cog):
             "text": content,
         }
 
-        async with self.session.post(url, headers=headers, json=payload) as response:
-            data = await response.json()
-            logger.debug(f"API Response: {data}")
-            flagged = any(item['likelihood'] >= 2 for item in data['openai']['items'])  # Lower likelihood threshold for leniency
-            return {
-                "flagged": flagged,
-                "items": data['openai']['items']
-            }
+        for _ in range(3):  # Retry up to 3 times
+            try:
+                async with self.session.post(url, headers=headers, json=payload) as response:
+                    data = await response.json()
+                    logger.debug(f"API Response: {data}")
+                    if 'openai' in data and isinstance(data['openai']['items'], list) and data['openai']['items']:
+                        return {'flagged': True, 'items': data['openai']['items']}
+                    return {'flagged': False, 'items': []}
+            except aiohttp.ClientError as e:
+                logger.error(f"HTTP request failed: {e}")
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to decode JSON response: {e}")
+
+        return {'flagged': False, 'items': []}  # Return a default value if all retries fail
 
 async def setup(bot):
     cog = MessageModeration(bot)
