@@ -1,9 +1,11 @@
 import discord
 from redbot.core import commands, Config, checks
+from redbot.core.data_manager import basic_config, cog_data_path
 import aiohttp
 import asyncio
 import logging
 import json
+import os
 
 logger = logging.getLogger("red.MessageModeration")
 
@@ -15,20 +17,47 @@ class MessageModeration(commands.Cog):
         self.config = Config.get_conf(self, identifier=1234567890)
         self.register_defaults()
         self.session = None
-        self.cache = {}
+        self.data_path = cog_data_path(self) / "ai_data.json"
+        self.load_data()
+        self.storage_limit = 2 * 1024 * 1024 * 1024  # 2GB
 
     def register_defaults(self):
         default_global = {
             "track_channel": None,
             "log_channel": None,
             "api_key": None,
+            "leniency_thresholds": {
+                "HateAndExtremism": 1.0,
+                "HateAndExtremism/threatening": 0.7,
+                "Harassment": 1.0,
+                "Harassment/threatening": 0.7,
+                "Violence": 0.7,
+                "Violence/graphic": 0.7,
+                "Self-harm": 0.7,
+                "Self-harm/intent": 0.7,
+                "Self-harm/instructions": 0.7,
+                "Sexual": 1.1,
+                "Sexual/minors": 0.5
+            }
         }
         self.config.register_global(**default_global)
+
+    def load_data(self):
+        if os.path.exists(self.data_path):
+            with open(self.data_path, "r") as file:
+                self.ai_data = json.load(file)
+        else:
+            self.ai_data = {"messages": [], "analysis": []}
+
+    def save_data(self):
+        with open(self.data_path, "w") as file:
+            json.dump(self.ai_data, file)
 
     async def initialize(self):
         await self.bot.wait_until_ready()
         self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))
         logger.info("MessageModeration cog initialized.")
+        self.bot.loop.create_task(self.periodic_training())
 
     def cog_unload(self):
         if self.session:
@@ -65,67 +94,56 @@ class MessageModeration(commands.Cog):
         if message.channel.id == track_channel_id:
             cleaned_content = self.clean_content(message.content)
             if cleaned_content:
+                self.store_message(message)
                 self.bot.loop.create_task(self.process_message(message, cleaned_content))
 
-    async def process_message(self, message, cleaned_content):
-        log_channel_id = await self.config.log_channel()
-        api_key = await self.config.api_key()
+    def store_message(self, message):
+        """Store the message content in ai_data.json."""
+        self.ai_data["messages"].append({
+            "id": message.id,
+            "author": str(message.author),
+            "content": message.content,
+            "timestamp": message.created_at.isoformat()
+        })
+        self.save_data()
 
-        if not log_channel_id or not api_key:
-            logger.error("Log channel or API key not set.")
-            return
+        # Check storage size and delete data if it exceeds the limit
+        if self.get_storage_size() > self.storage_limit:
+            self.delete_data()
 
-        log_channel = self.bot.get_channel(log_channel_id)
-        if not log_channel:
-            logger.error("Log channel not found.")
-            return
+    def get_storage_size(self):
+        """Calculate the total size of the ai_data.json file."""
+        return os.path.getsize(self.data_path)
 
-        analysis = self.cache.get(cleaned_content)
-        if not analysis:
-            analysis = await self.analyze_message(cleaned_content, api_key)
-            self.cache[cleaned_content] = analysis
+    def delete_data(self):
+        """Delete all data in the ai_data.json file."""
+        self.ai_data = {"messages": [], "analysis": []}
+        self.save_data()
 
-        leniency_thresholds = {
-            "HateAndExtremism": 1.2,
-            "HateAndExtremism/threatening": 1.1,
-            "Harassment": 1.0,
-            "Harassment/threatening": 1.1,
-            "Violence": 1.0,
-            "Violence/graphic": 1.1,
-            "Self-harm": 1.1,
-            "Self-harm/intent": 1.1,
-            "Self-harm/instructions": 1.1,
-            "Sexual": 1.1,
-            "Sexual/minors": 0.5
-        }
+    async def periodic_training(self):
+        """Periodically train the bot and clear data."""
+        while True:
+            await asyncio.sleep(86400)  # Run once a day
+            await self.train_bot()
 
-        flagged_categories = [
-            item['category'] for item in analysis['items']
-            if item['likelihood_score'] >= leniency_thresholds.get(item['category'], 1.1)
-        ]
+    async def train_bot(self):
+        """Train the bot on stored messages."""
+        messages = self.ai_data["messages"]
 
-        if flagged_categories:
-            previous_message = await self.get_previous_message(message)
-            previous_message_link = self.get_message_link(previous_message) if previous_message else "No previous message"
-            await log_channel.send(
-                f"Message from {message.author.mention} flagged for moderation:\n"
-                f"Content: {message.content}\n"
-                f"Categories: {', '.join(flagged_categories)}\n"
-                f"Previous message link: {previous_message_link}"
-            )
-            await message.delete()
+        # Analyze and adjust thresholds based on messages
+        for message in messages:
+            analysis = await self.analyze_message(message["content"], await self.config.api_key())
+            self.ai_data["analysis"].append(analysis)
+            for item in analysis["items"]:
+                category = item["category"]
+                leniency_thresholds = await self.config.leniency_thresholds()
+                if category in leniency_thresholds:
+                    leniency_thresholds[category] += 0.01  # Adjust leniency slightly
+                    await self.config.leniency_thresholds.set(leniency_thresholds)
+                    logger.info(f"Adjusted leniency threshold for {category} to {leniency_thresholds[category]}")
 
-    async def get_previous_message(self, message):
-        try:
-            history = await message.channel.history(limit=2, before=message).flatten()
-            if history:
-                return history[0]
-        except Exception as e:
-            logger.error(f"Failed to fetch previous message: {e}")
-        return None
-
-    def get_message_link(self, message):
-        return f"https://discord.com/channels/{message.guild.id}/{message.channel.id}/{message.id}"
+        # Clear data after training
+        self.delete_data()
 
     def clean_content(self, content):
         # Ignore words that start and end with ':' (typically emojis)
