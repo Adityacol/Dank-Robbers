@@ -6,6 +6,11 @@ import asyncio
 import logging
 import json
 import os
+import re
+import joblib
+from datetime import datetime, timedelta
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
 
 logger = logging.getLogger("red.MessageModeration")
 
@@ -18,8 +23,11 @@ class MessageModeration(commands.Cog):
         self.register_defaults()
         self.session = None
         self.data_path = cog_data_path(self) / "ai_data.json"
+        self.model_path = cog_data_path(self) / "moderation_model.pkl"
         self.load_data()
+        self.load_model()
         self.storage_limit = 2 * 1024 * 1024 * 1024  # 2GB
+        self.vectorizer = TfidfVectorizer()
 
     def register_defaults(self):
         default_global = {
@@ -52,6 +60,16 @@ class MessageModeration(commands.Cog):
     def save_data(self):
         with open(self.data_path, "w") as file:
             json.dump(self.ai_data, file)
+
+    def load_model(self):
+        if os.path.exists(self.model_path):
+            self.model = joblib.load(self.model_path)
+        else:
+            self.model = None
+
+    def save_model(self):
+        if self.model:
+            joblib.dump(self.model, self.model_path)
 
     async def initialize(self):
         await self.bot.wait_until_ready()
@@ -130,24 +148,81 @@ class MessageModeration(commands.Cog):
         """Train the bot on stored messages."""
         messages = self.ai_data["messages"]
 
-        # Analyze and adjust thresholds based on messages
-        for message in messages:
-            analysis = await self.analyze_message(message["content"], await self.config.api_key())
-            self.ai_data["analysis"].append(analysis)
-            for item in analysis["items"]:
-                category = item["category"]
-                leniency_thresholds = await self.config.leniency_thresholds()
-                if category in leniency_thresholds:
-                    leniency_thresholds[category] += 0.01  # Adjust leniency slightly
-                    await self.config.leniency_thresholds.set(leniency_thresholds)
-                    logger.info(f"Adjusted leniency threshold for {category} to {leniency_thresholds[category]}")
+        if not messages:
+            return
+
+        # Preprocess messages
+        contents = [self.clean_content(msg["content"]) for msg in messages]
+        labels = [msg.get("flagged", False) for msg in messages]
+
+        if contents and labels:
+            # Train a simple logistic regression model
+            X = self.vectorizer.fit_transform(contents)
+            self.model = LogisticRegression()
+            self.model.fit(X, labels)
+            self.save_model()
+            logger.info("Trained new moderation model.")
 
         # Clear data after training
         self.delete_data()
 
     def clean_content(self, content):
         # Ignore words that start and end with ':' (typically emojis)
-        return ' '.join(word for word in content.split() if not (word.startswith(':') and word.endswith(':')))
+        content = re.sub(r'\s*:\w+:\s*', ' ', content)
+        return content
+
+    async def process_message(self, message, cleaned_content):
+        log_channel_id = await self.config.log_channel()
+        api_key = await self.config.api_key()
+        leniency_thresholds = await self.config.leniency_thresholds()
+
+        if not log_channel_id or not api_key:
+            logger.error("Log channel or API key not set.")
+            return
+
+        log_channel = self.bot.get_channel(log_channel_id)
+        if not log_channel:
+            logger.error("Log channel not found.")
+            return
+
+        analysis = await self.analyze_message(cleaned_content, api_key)
+        if analysis.get("flagged"):
+            categories = [
+                item["category"] for item in analysis["items"]
+                if item["likelihood_score"] >= leniency_thresholds.get(item["category"], 1.0)
+            ]
+            if categories:
+                await self.moderate_message(message, categories, log_channel)
+        else:
+            if self.model:
+                X = self.vectorizer.transform([cleaned_content])
+                prediction = self.model.predict(X)
+                if prediction:
+                    await self.moderate_message(message, ["Model Prediction"], log_channel)
+
+    async def moderate_message(self, message, categories, log_channel):
+        previous_message = await self.get_previous_message(message)
+        previous_message_link = self.get_message_link(previous_message) if previous_message else "No previous message"
+
+        await log_channel.send(
+            f"Message from {message.author.mention} flagged for moderation:\n"
+            f"Content: {message.content}\n"
+            f"Categories: {', '.join(categories)}\n"
+            f"Previous message link: {previous_message_link}"
+        )
+        await message.delete()
+
+    async def get_previous_message(self, message):
+        try:
+            history = await message.channel.history(limit=2, before=message).flatten()
+            if history:
+                return history[0]
+        except Exception as e:
+            logger.error(f"Failed to fetch previous message: {e}")
+        return None
+
+    def get_message_link(self, message):
+        return f"https://discord.com/channels/{message.guild.id}/{message.channel.id}/{message.id}"
 
     async def analyze_message(self, content, api_key):
         url = "https://api.edenai.run/v2/text/moderation"
