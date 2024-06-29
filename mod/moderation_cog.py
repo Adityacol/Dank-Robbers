@@ -129,7 +129,9 @@ class MessageModeration(commands.Cog):
         async with self.session.post(url, headers=headers, json=payload) as response:
             data = await response.json()
             logger.debug(f"API Response: {data}")
-            return data['openai'][0] if 'openai' in data and data['openai'] else {'flagged': False, 'items': []}
+            if 'openai' in data and isinstance(data['openai'], list) and data['openai']:
+                return data['openai'][0]
+            return {'flagged': False, 'items': []}
 
 async def setup(bot):
     cog = MessageModeration(bot)
