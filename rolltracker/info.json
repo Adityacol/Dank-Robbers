@@ -1,0 +1,9 @@
+{
+    "name": "EmbedTracker",
+    "author": ["Your Name"],
+    "description": "A cog that tracks roll messages, determines winners, and manages payouts in a Discord channel.",
+    "install_msg": "Thank you for installing EmbedTracker! Ensure you set up the necessary channel IDs and permissions before using the cog.",
+    "short": "Roll Tracker and Payout Manager",
+    "requirements": [],
+    "tags": ["discord", "bot", "game", "tracking", "payout"]
+}

@@ -12,7 +12,7 @@ class StaffListCog(commands.Cog):
         self.staff_roles = self.load_staff_roles()
         self.staff_list_channel_id = None
         self.staff_list_message_id = None
-        self.update_interval = 600  # Update interval in seconds (e.g., 600 seconds = 10 minutes)
+        self.update_interval = 300  # Update interval in seconds (e.g., 600 seconds = 10 minutes)
         self.bot.loop.create_task(self.auto_update_staff_list())
 
     def load_staff_roles(self):

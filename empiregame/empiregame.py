@@ -1,6 +1,7 @@
 import discord
 import asyncio
 import random
+import re
 from redbot.core import commands, app_commands
 from redbot.core.bot import Red
 from typing import Dict, List
@@ -9,9 +10,16 @@ ROLE_ID = 899916792447766528
 GAME_ROLE_ID = 1030538893088534549  # Role to be added/removed
 ALIAS_WORD_LIMIT = 3  # Set the word limit for aliases
 MAX_PLAYERS = 10  # Decreased player limit to 10
+PROFANITY_LIST = ["slur1", "slur2"]  # Add your list of slurs here
 
 def has_role(interaction: discord.Interaction):
     return any(role.id == ROLE_ID for role in interaction.user.roles)
+
+def contains_profanity(alias: str):
+    return any(profanity in alias.lower() for profanity in PROFANITY_LIST)
+
+def is_user_mention(alias: str):
+    return re.match(r"<@!?\d+>", alias) is not None
 
 class EmpireGame(commands.Cog):
     def __init__(self, bot: Red):
@@ -21,14 +29,13 @@ class EmpireGame(commands.Cog):
         self.players = {}
         self.aliases = {}
         self.turn_order = []
+        self.dead_players = []
         self.current_turn = 0
         self.joining_channel = None
         self.host = None
         self.turn_timer = None
-        self.join_task = None
         self.missed_turns = {}
-        self.original_permissions = {}
-        self.correct_guess = False  # Flag to track correct guess
+        self.extra_turn = False  # Flag to track extra turn
         self.view = None
 
     @app_commands.command(name="setup_empire_game")
@@ -79,12 +86,12 @@ class EmpireGame(commands.Cog):
         self.players = {}
         self.aliases = {}
         self.turn_order = []
+        self.dead_players = []
         self.current_turn = 0
         self.game_setup = True
         self.game_started = False
         self.host = interaction.user.id
         self.missed_turns = {}
-        self.original_permissions = {}
 
     async def join_button_callback(self, interaction: discord.Interaction):
         if not self.game_setup:
@@ -188,6 +195,7 @@ class EmpireGame(commands.Cog):
                 role = interaction.guild.get_role(GAME_ROLE_ID)
                 await member.remove_roles(role)
                 eliminated_players.append(member.mention)
+                self.dead_players.append(player_id)
                 self.players.pop(player_id)
                 self.missed_turns.pop(player_id)
         
@@ -195,7 +203,7 @@ class EmpireGame(commands.Cog):
             eliminated_message = "The following players are eliminated for not saving an alias in time:\n" + "\n".join(eliminated_players)
             await interaction.channel.send(eliminated_message)
         
-        if len(self.players) < 2:
+        if len(self.players) - len(self.dead_players) < 2:
             await self.announce_winner(interaction)
             return
 
@@ -219,43 +227,83 @@ class EmpireGame(commands.Cog):
         if alias in self.aliases.values():
             await interaction.response.send_message("❗ This alias has already been taken. Please choose another one.", ephemeral=True)
             return
+        if contains_profanity(alias) or is_user_mention(alias):
+            await interaction.response.send_message("❗ This alias is not allowed. Please choose another one.", ephemeral=True)
+            return
         self.players[interaction.user.id] = alias
         self.aliases[interaction.user.id] = alias
         await interaction.response.send_message("✅ Your alias has been saved.", ephemeral=True)
         if len(self.aliases) == len(self.players):
             await self.start_guessing(interaction)
 
+    @app_commands.command(name="guess_alias")
+    async def guess_alias(self, interaction: discord.Interaction, member: discord.Member, guessed_alias: str):
+        """Allows a player to guess an alias."""
+        if not self.game_started:
+            await interaction.response.send_message("❗ The game has not started yet.", ephemeral=True)
+            return
+        if interaction.user.id != self.turn_order[self.current_turn]:
+            await interaction.response.send_message("❗ It's not your turn.", ephemeral=True)
+            return
+        if guessed_alias not in self.aliases.values():
+            await interaction.response.send_message("❗ This alias is not valid.", ephemeral=True)
+            return
+        if member.id == interaction.user.id:
+            await interaction.response.send_message("❗ You cannot guess your own alias.", ephemeral=True)
+            return
+
+        self.missed_turns[interaction.user.id] = 0  # Reset missed turns on successful guess
+
+        if self.aliases.get(member.id) == guessed_alias:
+            await interaction.response.send_message(f"🎉 Correct guess! {member.mention} was eliminated.")
+            role = interaction.guild.get_role(GAME_ROLE_ID)
+            await member.remove_roles(role)
+            self.dead_players.append(member.id)
+            self.extra_turn = True
+            await self.continue_turn(interaction, grant_extra_turn=True)  # Grant an extra turn
+        else:
+            await interaction.response.send_message(f"❌ Wrong guess. It's now the next player's turn.")
+            self.extra_turn = False
+            await self.continue_turn(interaction)
+
+    @guess_alias.autocomplete('guessed_alias')
+    async def guess_alias_autocomplete(self, interaction: discord.Interaction, current: str):
+        choices = [alias for alias in self.aliases.values() if current.lower() in alias.lower()]
+        return [app_commands.Choice(name=choice, value=choice) for choice in choices]
+
     async def start_guessing(self, interaction: discord.Interaction):
         if not self.game_started:
             return
 
-        if len(self.players) < 2:
+        if len(self.players) - len(self.dead_players) < 2:
             await self.announce_winner(interaction)
             return
 
         await self.continue_turn(interaction)
 
-    async def continue_turn(self, interaction: discord.Interaction):
+    async def continue_turn(self, interaction: discord.Interaction, grant_extra_turn=False):
         if len(self.turn_order) == 0:
             await self.announce_winner(interaction)
             return
 
-        if self.current_turn >= len(self.turn_order):
-            self.current_turn = 0
-
         current_player_id = self.turn_order[self.current_turn]
         current_player = interaction.guild.get_member(current_player_id)
 
-        while current_player_id not in self.players:
+        while self.players.get(current_player_id) is None:
             self.advance_turn()
-            if len(self.players) < 2:
+            if len(self.players) - len(self.dead_players) < 2:
                 await self.announce_winner(interaction)
                 return
             current_player_id = self.turn_order[self.current_turn]
             current_player = interaction.guild.get_member(current_player_id)
 
-        shuffled_aliases = random.sample(list(self.aliases.values()), len(self.aliases))
-        players_aliases = list(zip([interaction.guild.get_member(pid).mention for pid in self.players], shuffled_aliases))
+        if len(self.players) - len(self.dead_players) < 2:
+            await self.announce_winner(interaction)
+            return
+
+        alive_players = [interaction.guild.get_member(pid).mention for pid in self.players if pid not in self.dead_players]
+        shuffled_aliases = random.sample([self.aliases[pid] for pid in self.players if pid not in self.dead_players], len(self.aliases))
+        players_aliases = list(zip(alive_players, shuffled_aliases))
         players_field = "\n".join([player for player, _ in players_aliases])
         aliases_field = "\n".join([alias for _, alias in players_aliases])
 
@@ -284,75 +332,39 @@ class EmpireGame(commands.Cog):
             await interaction.channel.send(f"❗ {current_player.mention} didn't guess an alias for 2 rounds and was eliminated.")
             role = interaction.guild.get_role(GAME_ROLE_ID)
             await current_player.remove_roles(role)
-            self.players.pop(current_player_id)
-            self.aliases.pop(current_player_id)
-            self.turn_order.remove(current_player_id)
+            self.dead_players.append(current_player_id)
 
-            if len(self.players) < 2:
+            if len(self.players) - len(self.dead_players) < 2:
                 await self.announce_winner(interaction)
                 return
 
-        await interaction.channel.send(f"❗ {current_player.mention} took too long to guess. Moving to the next player.")
-        self.advance_turn()
-        await self.start_guessing(interaction)
-
-    @app_commands.command(name="guess_alias")
-    async def guess_alias(self, interaction: discord.Interaction, member: discord.Member, guessed_alias: str):
-        """Allows a player to guess an alias."""
-        if not self.game_started:
-            await interaction.response.send_message("❗ The game has not started yet.", ephemeral=True)
-            return
-        if interaction.user.id != self.turn_order[self.current_turn]:
-            await interaction.response.send_message("❗ It's not your turn.", ephemeral=True)
-            return
-        if guessed_alias not in self.aliases.values():
-            await interaction.response.send_message("❗ This alias is not valid.", ephemeral=True)
-            return
-        if member.id == interaction.user.id:
-            await interaction.response.send_message("❗ You cannot guess your own alias.", ephemeral=True)
-            return
-
-        self.missed_turns[interaction.user.id] = 0  # Reset missed turns on successful guess
-
-        if self.aliases.get(member.id) == guessed_alias:
-            await interaction.response.send_message(f"🎉 Correct guess! {member.mention} was eliminated.")
-            role = interaction.guild.get_role(GAME_ROLE_ID)
-            await member.remove_roles(role)
-            self.players.pop(member.id)
-            self.aliases.pop(member.id)
-            self.turn_order.remove(member.id)
-            self.correct_guess = True
-            if len(self.players) < 2:
-                await self.announce_winner(interaction)
-                return
-            await self.continue_turn(interaction)  # Grant an extra turn
         else:
-            await interaction.response.send_message(f"❌ Wrong guess. It's now the next player's turn.")
-            self.correct_guess = False
-            self.advance_turn()
-            await self.start_guessing(interaction)
+            await interaction.channel.send(f"❗ {current_player.mention} took too long to guess. Moving to the next player.")
+
+        self.extra_turn = False
+        self.advance_turn()
+        await self.continue_turn(interaction)
 
     async def announce_winner(self, interaction: discord.Interaction):
-        if not self.players:
-            await interaction.channel.send("❗ There are no players left in the game.")
+        alive_players = [pid for pid in self.players if pid not in self.dead_players]
+        if len(alive_players) == 1:
+            winner_id = alive_players[0]
+            winner = interaction.guild.get_member(winner_id)
+            role = interaction.guild.get_role(GAME_ROLE_ID)
+            await winner.remove_roles(role)
+            embed = discord.Embed(
+                title="🏆 We Have a Winner!",
+                description=f"Congratulations to {winner.mention} for winning the Empire Game!",
+                color=discord.Color.gold()
+            )
+            await interaction.channel.send(embed=embed)
             await self.reset_game()
-            return
-        winner_id = next(iter(self.players))
-        winner = interaction.guild.get_member(winner_id)
-        role = interaction.guild.get_role(GAME_ROLE_ID)
-        await winner.remove_roles(role)
-        embed = discord.Embed(
-            title="🏆 We Have a Winner!",
-            description=f"Congratulations to {winner.mention} for winning the Empire Game!",
-            color=discord.Color.gold()
-        )
-        await interaction.channel.send(embed=embed)
-        await self.reset_game()
 
     def advance_turn(self):
-        if not self.correct_guess:
+        while True:
             self.current_turn = (self.current_turn + 1) % len(self.turn_order)
-        self.correct_guess = False
+            if self.turn_order[self.current_turn] not in self.dead_players:
+                break
 
     async def reset_game(self):
         self.game_setup = False
@@ -360,23 +372,14 @@ class EmpireGame(commands.Cog):
         self.players = {}
         self.aliases = {}
         self.turn_order = []
+        self.dead_players = []
         self.current_turn = 0
         self.host = None
         if self.turn_timer:
             self.turn_timer.cancel()
         self.turn_timer = None
-        if self.join_task:
-            self.join_task.cancel()
-        self.join_task = None
         self.missed_turns = {}
-        if self.joining_channel is not None:
-            role = self.joining_channel.guild.get_role(GAME_ROLE_ID)
-            for player_id in self.original_permissions.keys():
-                member = self.joining_channel.guild.get_member(player_id)
-                if member:
-                    await member.remove_roles(role)
-            self.original_permissions = {}
-            self.joining_channel = None
+        self.joining_channel = None
 
     @commands.Cog.listener()
     async def on_ready(self):

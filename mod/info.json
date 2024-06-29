@@ -1,0 +1,8 @@
+{
+    "author": ["Your Name"],
+    "description": "A cog for tracking and moderating messages.",
+    "install_msg": "Thanks for installing Message Moderation cog.",
+    "short": "Message Moderation",
+    "name": "message_moderation",
+    "requirements": ["google-cloud-language"]
+}
