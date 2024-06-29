@@ -1,6 +1,6 @@
 import discord
 from redbot.core import commands, Config, checks
-from redbot.core.data_manager import basic_config, cog_data_path
+from redbot.core.data_manager import cog_data_path
 import aiohttp
 import asyncio
 import logging
@@ -9,8 +9,10 @@ import os
 import re
 import joblib
 from datetime import datetime, timedelta
+from collections import defaultdict
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
+from textblob import TextBlob
 
 logger = logging.getLogger("red.MessageModeration")
 
@@ -28,6 +30,7 @@ class MessageModeration(commands.Cog):
         self.load_model()
         self.storage_limit = 2 * 1024 * 1024 * 1024  # 2GB
         self.vectorizer = TfidfVectorizer()
+        self.user_behavior = defaultdict(lambda: {"count": 0, "last_activity": None})
 
     def register_defaults(self):
         default_global = {
@@ -76,6 +79,7 @@ class MessageModeration(commands.Cog):
         self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))
         logger.info("MessageModeration cog initialized.")
         self.bot.loop.create_task(self.periodic_training())
+        self.bot.loop.create_task(self.periodic_adjustment())
 
     def cog_unload(self):
         if self.session:
@@ -144,6 +148,12 @@ class MessageModeration(commands.Cog):
             await asyncio.sleep(86400)  # Run once a day
             await self.train_bot()
 
+    async def periodic_adjustment(self):
+        """Periodically adjust leniency thresholds based on message content."""
+        while True:
+            await asyncio.sleep(3600)  # Run every hour
+            await self.adjust_leniency()
+
     async def train_bot(self):
         """Train the bot on stored messages."""
         messages = self.ai_data["messages"]
@@ -165,6 +175,54 @@ class MessageModeration(commands.Cog):
 
         # Clear data after training
         self.delete_data()
+
+    async def adjust_leniency(self):
+        """Adjust leniency thresholds based on message content."""
+        messages = self.ai_data["messages"]
+
+        if not messages:
+            return
+
+        content_counter = defaultdict(int)
+        time_based_adjustments = {
+            "morning": 0.1,
+            "afternoon": 0.1,
+            "evening": 0.2,
+            "night": 0.3
+        }
+        keyword_adjustments = {
+            "fuck": 0.1,
+            "bitch": 0.1,
+            "stupid": 0.05,
+            "idiot": 0.05,
+        }
+        current_hour = datetime.utcnow().hour
+        time_period = (
+            "morning" if 6 <= current_hour < 12 else
+            "afternoon" if 12 <= current_hour < 18 else
+            "evening" if 18 <= current_hour < 24 else
+            "night"
+        )
+
+        for msg in messages:
+            words = self.clean_content(msg["content"]).split()
+            self.user_behavior[msg["author"]]["count"] += 1
+            self.user_behavior[msg["author"]]["last_activity"] = msg["timestamp"]
+
+            for word in words:
+                content_counter[word] += 1
+
+        # Adjust leniency thresholds based on frequency and time of day
+        async with self.config.leniency_thresholds() as leniency:
+            for word, count in content_counter.items():
+                if count > 10:  # If a word is used more than 10 times, adjust thresholds
+                    adjustment = keyword_adjustments.get(word.lower(), 0)
+                    if adjustment > 0:
+                        for category in leniency:
+                            leniency[category] += adjustment
+
+            for category in leniency:
+                leniency[category] += time_based_adjustments[time_period]
 
     def clean_content(self, content):
         # Ignore words that start and end with ':' (typically emojis)
@@ -211,6 +269,15 @@ class MessageModeration(commands.Cog):
             f"Previous message link: {previous_message_link}"
         )
         await message.delete()
+
+        # Track user behavior
+        user_data = self.user_behavior[message.author]
+        if user_data["count"] > 5 and user_data["last_activity"]:
+            last_activity = datetime.fromisoformat(user_data["last_activity"])
+            if (datetime.utcnow() - last_activity) < timedelta(minutes=30):
+                # Escalate repeated offenses within a short period
+                await message.author.timeout(timedelta(minutes=10), reason="Repeated offenses")
+                await log_channel.send(f"{message.author.mention} has been timed out for repeated offenses.")
 
     async def get_previous_message(self, message):
         try:
