@@ -2,6 +2,7 @@ import discord
 from redbot.core import commands, Config, checks
 import aiohttp
 import logging
+import json
 
 logger = logging.getLogger("red.MessageModeration")
 
@@ -126,12 +127,20 @@ class MessageModeration(commands.Cog):
             "text": content,
         }
 
-        async with self.session.post(url, headers=headers, json=payload) as response:
-            data = await response.json()
-            logger.debug(f"API Response: {data}")
-            if 'openai' in data and isinstance(data['openai'], list) and data['openai']:
-                return data['openai'][0]
-            return {'flagged': False, 'items': []}
+        for _ in range(3):  # Retry up to 3 times
+            try:
+                async with self.session.post(url, headers=headers, json=payload) as response:
+                    data = await response.json()
+                    logger.debug(f"API Response: {data}")
+                    if 'openai' in data and isinstance(data['openai'], list) and data['openai']:
+                        return data['openai'][0]
+                    return {'flagged': False, 'items': []}
+            except aiohttp.ClientError as e:
+                logger.error(f"HTTP request failed: {e}")
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to decode JSON response: {e}")
+
+        return {'flagged': False, 'items': []}  # Return a default value if all retries fail
 
 async def setup(bot):
     cog = MessageModeration(bot)
