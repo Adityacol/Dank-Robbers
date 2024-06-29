@@ -98,16 +98,16 @@ class MessageModeration(commands.Cog):
             self.cache[cleaned_content] = analysis
 
         leniency_thresholds = {
-            "HateAndExtremism": 3.0 * sensitivity,
-            "HateAndExtremism/threatening": 1.7 * sensitivity,
-            "Harassment": 1.0 * sensitivity,
+            "HateAndExtremism": 0.99998 * sensitivity,
+            "HateAndExtremism/threatening": 0.99989 * sensitivity,
+            "Harassment": 0.99989 * sensitivity,
             "Harassment/threatening": 0.7 * sensitivity,
-            "Violence": 2.7 * sensitivity,
-            "Violence/graphic": 2.7 * sensitivity,
-            "Self-harm": 2.7 * sensitivity,
-            "Self-harm/intent": 2.7 * sensitivity,
-            "Self-harm/instructions": 0.7 * sensitivity,
-            "Sexual": 1.6 * sensitivity,
+            "Violence": 0.999989 * sensitivity,
+            "Violence/graphic": 0.999989 * sensitivity,
+            "Self-harm": 0.9998989 * sensitivity,
+            "Self-harm/intent": 0.99986253432 * sensitivity,
+            "Self-harm/instructions": 0.9998263526 * sensitivity,
+            "Sexual": 0.99998273522123 * sensitivity,
             "Sexual/minors": 0.5 * sensitivity
         }
 
