@@ -4,7 +4,6 @@ import aiohttp
 import asyncio
 import logging
 import json
-from datetime import datetime, timedelta
 
 logger = logging.getLogger("red.MessageModeration")
 
@@ -17,14 +16,12 @@ class MessageModeration(commands.Cog):
         self.register_defaults()
         self.session = None
         self.cache = {}
-        self.user_history = {}
 
     def register_defaults(self):
         default_global = {
             "track_channel": None,
             "log_channel": None,
             "api_key": None,
-            "sensitivity": 1.0,
         }
         self.config.register_global(**default_global)
 
@@ -59,14 +56,6 @@ class MessageModeration(commands.Cog):
         await ctx.send("API key set.")
         logger.info("API key set.")
 
-    @commands.command()
-    @checks.admin_or_permissions(administrator=True)
-    async def set_sensitivity(self, ctx, sensitivity: float):
-        """Set the sensitivity level for moderation (e.g., 1.0 for default, higher for more lenient)."""
-        await self.config.sensitivity.set(sensitivity)
-        await ctx.send(f"Sensitivity set to {sensitivity}.")
-        logger.info(f"Sensitivity set to {sensitivity}.")
-
     @commands.Cog.listener()
     async def on_message(self, message):
         if message.author.bot:
@@ -81,7 +70,6 @@ class MessageModeration(commands.Cog):
     async def process_message(self, message, cleaned_content):
         log_channel_id = await self.config.log_channel()
         api_key = await self.config.api_key()
-        sensitivity = await self.config.sensitivity()
 
         if not log_channel_id or not api_key:
             logger.error("Log channel or API key not set.")
@@ -98,32 +86,27 @@ class MessageModeration(commands.Cog):
             self.cache[cleaned_content] = analysis
 
         leniency_thresholds = {
-            "HateAndExtremism": 0.99998 * sensitivity,
-            "HateAndExtremism/threatening": 0.99989 * sensitivity,
-            "Harassment": 0.99989 * sensitivity,
-            "Harassment/threatening": 0.7 * sensitivity,
-            "Violence": 0.999989 * sensitivity,
-            "Violence/graphic": 0.999989 * sensitivity,
-            "Self-harm": 0.9998989 * sensitivity,
-            "Self-harm/intent": 0.99986253432 * sensitivity,
-            "Self-harm/instructions": 0.9998263526 * sensitivity,
-            "Sexual": 0.99998273522123 * sensitivity,
-            "Sexual/minors": 0.5 * sensitivity
+            "HateAndExtremism": 1.2,
+            "HateAndExtremism/threatening": 1.1,
+            "Harassment": 1.0,
+            "Harassment/threatening": 1.1,
+            "Violence": 1.0,
+            "Violence/graphic": 1.1,
+            "Self-harm": 1.1,
+            "Self-harm/intent": 1.1,
+            "Self-harm/instructions": 1.1,
+            "Sexual": 1.1,
+            "Sexual/minors": 0.5
         }
 
         flagged_categories = [
             item['category'] for item in analysis['items']
-            if item['likelihood_score'] >= leniency_thresholds.get(item['category'], 1.1 * sensitivity)
+            if item['likelihood_score'] >= leniency_thresholds.get(item['category'], 1.1)
         ]
 
         if flagged_categories:
-            user_history = self.user_history.get(message.author.id, [])
-            user_history.append((datetime.utcnow(), cleaned_content))
-            self.user_history[message.author.id] = user_history
-
             previous_message = await self.get_previous_message(message)
             previous_message_link = self.get_message_link(previous_message) if previous_message else "No previous message"
-
             await log_channel.send(
                 f"Message from {message.author.mention} flagged for moderation:\n"
                 f"Content: {message.content}\n"
