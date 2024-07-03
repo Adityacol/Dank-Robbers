@@ -109,14 +109,25 @@ class Lottery(commands.Cog):
             channel = self.bot.get_channel(channel_id)
             if winner_id and channel:
                 winner = await self.bot.fetch_user(int(winner_id))
-                winner_embed = discord.Embed(
-                    title="Lottery Winner!",
-                    description=f'Congratulations {winner.mention}, you have won the lottery with one of your tickets! You have won {prize_amount} coins!',
+                embed = discord.Embed(
+                    title="🎉 Lottery Winner 🎉",
+                    description=f"{winner.mention} walked away with 💰 **{prize_amount:,}**",
                     color=discord.Color.gold()
                 )
-                winner_embed.set_thumbnail(url=winner.avatar.url)
-                winner_embed.set_footer(text="Built by renivier")
-                await channel.send(embed=winner_embed)
+                embed.add_field(name="They paid:", value=f"🪙 {winner_data['donation']:,} (1 entry)", inline=False)
+                embed.add_field(name="Profit:", value=f"{(prize_amount / winner_data['donation']):.2%}", inline=False)
+                
+                guild_data = self.load_guild_data()
+                user_ticket_data = [(user_id, user_data['tickets']) for user_id, user_data in guild_data[str(guild.id)].items()]
+                top_spenders = sorted(user_ticket_data, key=lambda x: x[1], reverse=True)[:3]
+
+                top_spenders_list = "\n".join([f"<@{user_id}>: {tickets:,} entries" for user_id, tickets in top_spenders])
+                embed.add_field(name="Top 3 Spenders:", value=top_spenders_list, inline=False)
+                
+                embed.set_thumbnail(url=winner.avatar.url)
+                embed.set_footer(text="Built by renivier")
+
+                await channel.send(embed=embed)
 
                 end_embed = discord.Embed(
                     title="Lottery Ended",
@@ -136,7 +147,7 @@ class Lottery(commands.Cog):
 
     async def draw_winner(self, guild):
         guild_data = self.load_guild_data()
-        print(f"Guild Data Before Draw: ")
+        print(f"Guild Data Before Draw: {guild_data}")
         if str(guild.id) not in guild_data:
             return None, None, 0
 
@@ -225,7 +236,7 @@ class Lottery(commands.Cog):
 
     async def add_tickets(self, guild, user, tickets):
         guild_data = self.load_guild_data()
-        print(f"Guild Data Before Adding Tickets:")
+        print(f"Guild Data Before Adding Tickets: {guild_data}")
 
         if str(guild.id) not in guild_data:
             guild_data[str(guild.id)] = {}
@@ -281,5 +292,6 @@ class Lottery(commands.Cog):
             await ctx.send("Lottery ended manually.")
         else:
             await ctx.send("You do not have permission to end the lottery.")
+
 async def setup(bot):
     await bot.add_cog(Lottery(bot))
