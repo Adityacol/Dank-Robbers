@@ -118,7 +118,7 @@ class Lottery(commands.Cog):
                 embed.add_field(name="Profit:", value=f"{(prize_amount / winner_data['donation']):.2%}", inline=False)
                 
                 guild_data = self.load_guild_data()
-                user_ticket_data = [(user_id, user_data['tickets']) for user_id, user_data in guild_data[str(guild.id)].items()]
+                user_ticket_data = [(user_id, user_data['tickets']) for user_id, user_data in guild_data.get(str(guild.id), {}).items()]
                 top_spenders = sorted(user_ticket_data, key=lambda x: x[1], reverse=True)[:3]
 
                 top_spenders_list = "\n".join([f"<@{user_id}>: {tickets:,} entries" for user_id, tickets in top_spenders])
@@ -148,7 +148,7 @@ class Lottery(commands.Cog):
     async def draw_winner(self, guild):
         guild_data = self.load_guild_data()
         print(f"Guild Data Before Draw: {guild_data}")
-        if str(guild.id) not in guild_data:
+        if str(guild.id) not in guild_data or not guild_data[str(guild.id)]:
             return None, None, 0
 
         ticket_pool = []
