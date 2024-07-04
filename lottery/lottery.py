@@ -128,6 +128,8 @@ class Lottery(commands.Cog):
                 top_spenders = sorted(user_ticket_data, key=lambda x: x[1], reverse=True)[:3]
 
                 top_spenders_list = "\n".join([f"<@{user_id}>: {tickets:,} entries" for user_id, tickets in top_spenders])
+                if not top_spenders_list:
+                    top_spenders_list = "No top spenders"
                 embed.add_field(name="Top 3 Spenders:", value=top_spenders_list, inline=False)
                 
                 embed.set_thumbnail(url=winner.avatar.url)
@@ -147,6 +149,7 @@ class Lottery(commands.Cog):
                 payout_embed.set_footer(text="Rumble Royale • Keep on battling!")
 
                 message = await payout_channel.send(embed=payout_embed)
+                self.sent_embeds[message.id] = {"winner_id": winner.id, "prize_amount": prize_amount}
                 await message.add_reaction("⏳")
 
                 def check(reaction, user):
