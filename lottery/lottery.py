@@ -330,7 +330,8 @@ class Lottery(commands.Cog):
 
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, payload):
-        if payload.channel_id in [guild_config['payout_channel_id'] for guild_config in await self.config.all_guilds().values()] and str(payload.emoji) == "⏳":
+        payout_channel_ids = [guild_config['payout_channel_id'] for guild_config in await self.config.all_guilds().values()]
+        if payload.channel_id in payout_channel_ids and str(payload.emoji) == "⏳":
             message_id = payload.message_id
             if message_id in self.sent_embeds:
                 guild = self.bot.get_guild(payload.guild_id)
