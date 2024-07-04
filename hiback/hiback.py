@@ -314,3 +314,5 @@ class HiBack(commands.Cog):
                 discord.Forbidden,
             ):
                 pass
+def setup(bot):
+    bot.add_cog(HiBack(bot))
