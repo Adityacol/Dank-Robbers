@@ -1,10 +1,11 @@
 import discord
+from discord.ext import tasks
 from redbot.core import commands, Config, data_manager
 import random
 import asyncio
 from datetime import datetime, timedelta
 import json
-from discord.ext import task
+
 ELEMENT_BOT_ID = 957635842631950379
 LOTTERY_DURATION = 60 * 60 * 24
 PAYMENT_ROLE_ID = 1018578013140566137
@@ -30,7 +31,7 @@ class Lottery(commands.Cog):
         self.start_lottery_task.cancel()
         print("Lottery cog unloaded")
 
-    @task.loop(seconds=60)  # Check every minute
+    @tasks.loop(seconds=60)  # Check every minute
     async def start_lottery_task(self):
         now = datetime.utcnow()
         all_guilds = await self.config.all_guilds()
