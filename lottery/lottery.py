@@ -119,7 +119,8 @@ class Lottery(commands.Cog):
                     description=f"{winner.mention} walked away with 💰 **{prize_amount:,}**",
                     color=discord.Color.gold()
                 )
-                embed.add_field(name="They paid:", value=f"🪙 {winner_data['donation']:,} (1 entry)", inline=False)
+                entries = winner_data['donation'] // 10000
+                embed.add_field(name="They paid:", value=f"🪙 {winner_data['donation']:,} ({entries} entries)", inline=False)
                 embed.add_field(name="Profit:", value=f"{(prize_amount / winner_data['donation']):.2%}", inline=False)
                 
                 guild_data = self.load_guild_data()
@@ -156,7 +157,7 @@ class Lottery(commands.Cog):
                     if PAYMENT_ROLE_ID in [role.id for role in user.roles]:
                         updated_embed = payout_embed.copy()
                         updated_embed.title = "🏆 Payout Confirmed 🏆"
-                        updated_embed.description = f"Congratulations {winner.mention}!\n\nPayout Command\n```{payout_command}```\n\nPaid by {user.mention}"
+                        updated_embed.description = f"Congratulations {winner.mention}!\n\nPaid by {user.mention}"
                         await message.edit(embed=updated_embed)
                         await message.clear_reaction("⏳")
                         await message.add_reaction("👍")
@@ -350,7 +351,7 @@ class Lottery(commands.Cog):
                 embed_message = await target_channel.fetch_message(message_id)
                 embed = embed_message.embeds[0]
                 embed.title = "🏆 Payout Confirmed 🏆"
-                embed.description = f"Congratulations <@{winner_id}>!\n\nPayout Command\n```/serverevents payout user:{winner_id} quantity:{prize_amount}```\n\nPaid by {payer_user.mention}"
+                embed.description = f"Congratulations <@{winner_id}>!\n\nPaid by {payer_user.mention}"
                 await embed_message.edit(embed=embed)
                 await embed_message.clear_reaction("⏳")
                 await embed_message.add_reaction("👍")
