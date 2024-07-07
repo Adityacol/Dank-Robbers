@@ -126,8 +126,8 @@ class Lottery(commands.Cog):
                     color=discord.Color.gold()
                 )
                 winner_embed.add_field(name="They paid:", value=f"🪙 {winner_data['donation']:,} ({entries} entries)", inline=False)
-                winner_embed.add_field(name="<a:dr_zarrow:1075563743477497946> Users", value=f"{total_users}", inline=False)
-                winner_embed.add_field(name="<a:dr_zarrow:1075563743477497946> Total Tickets", value=f"{total_tickets}", inline=False)
+                winner_embed.add_field(name="<a:dr_zarrow:1075563743477497946> Users **{total_users}** ")
+                winner_embed.add_field(name="<a:dr_zarrow:1075563743477497946> Total Tickets **{total_tickets}** ")
                 winner_embed.set_thumbnail(url=winner.avatar.url)
                 winner_embed.set_footer(text="Built by renivier")
 
