@@ -230,7 +230,7 @@ class Lottery(commands.Cog):
     @commands.guild_only()
     async def set_payout_channel(self, ctx):
         await self.config.guild(ctx.guild).payout_channel_id.set(ctx.channel.id)
-        await ctx.send(f'This channel has been set for payout messages!')
+        await ctx.send(f'This channel has been set for payout messages!!')
 
     @commands.Cog.listener()
     async def on_message(self, message):
