@@ -110,7 +110,7 @@ class Lottery(commands.Cog):
             self.lottery_running.remove(guild.id)
 
         await self.config.guild(guild).end_time.clear()
-        winner_id, winner_data, prize_amount = await self.draw_winner(guild)
+        winner_id, winner_data, prize_amount, total_tickets, total_users = await self.draw_winner(guild)
         guild_config = await self.config.guild(guild).all()
         winner_channel_id = guild_config.get('winner_channel_id')
         payout_channel_id = guild_config.get('payout_channel_id')
@@ -121,12 +121,13 @@ class Lottery(commands.Cog):
                 winner = await self.bot.fetch_user(int(winner_id))
                 entries = winner_data['donation'] // 10000
                 winner_embed = discord.Embed(
-                    title="🎉 Lottery Winner 🎉",
-                    description=f"{winner.mention} walked away with 💰 **{prize_amount:,}**",
+                    title="<a:dr_gaw:1233462035787022429> Lottery Winner <a:dr_gaw:1233462035787022429>",
+                    description=f"{winner.mention} walked away with <a:dr_zcash:1075563572924530729> **{prize_amount:,}**",
                     color=discord.Color.gold()
                 )
                 winner_embed.add_field(name="They paid:", value=f"🪙 {winner_data['donation']:,} ({entries} entries)", inline=False)
-                winner_embed.add_field(name="Profit:", value=f"{(prize_amount / winner_data['donation']):.2%}", inline=False)
+                winner_embed.add_field(name="Total Users Participated:", value=f"{total_users}", inline=False)
+                winner_embed.add_field(name="Total Tickets Bought:", value=f"{total_tickets}", inline=False)
                 winner_embed.set_thumbnail(url=winner.avatar.url)
                 winner_embed.set_footer(text="Built by renivier")
 
@@ -141,7 +142,7 @@ class Lottery(commands.Cog):
                     description=f"Congratulations {winner.mention}!\n\nPayout Command\n```{payout_command}```",
                     color=discord.Color.blue()
                 )
-                payout_embed.set_footer(text="Rumble Royale • Keep on battling!")
+                payout_embed.set_footer(text="Lottery Winner")
 
                 message = await payout_channel.send(embed=payout_embed)
                 self.sent_embeds[message.id] = {"winner_id": winner.id, "prize_amount": prize_amount}
@@ -167,18 +168,20 @@ class Lottery(commands.Cog):
         guild_data = self.load_guild_data()
         print(f"Guild Data Before Draw: {guild_data}")
         if str(guild.id) not in guild_data or not guild_data[str(guild.id)]:
-            return None, None, 0
+            return None, None, 0, 0, 0
 
         ticket_pool = []
         total_donations = 0
+        total_users = len(guild_data[str(guild.id)])
 
         for user_id, user_data in guild_data[str(guild.id)].items():
             ticket_pool.extend([user_id] * user_data['tickets'])
             total_donations += user_data['donation']
 
         if not ticket_pool:
-            return None, None, 0
+            return None, None, 0, 0, 0
 
+        total_tickets = len(ticket_pool)
         winning_ticket = random.choice(ticket_pool)
         winner_id = winning_ticket
         winner_data = guild_data[str(guild.id)][winner_id]
@@ -189,7 +192,7 @@ class Lottery(commands.Cog):
         self.clear_guild_tickets()
         print(f"Guild Data After Draw: {self.load_guild_data()}")
 
-        return winner_id, winner_data, prize_amount
+        return winner_id, winner_data, prize_amount, total_tickets, total_users
 
     def clear_guild_tickets(self):
         print("Clearing guild tickets...")
@@ -257,7 +260,7 @@ class Lottery(commands.Cog):
                         total_tickets = await self.add_tickets(guild, user, tickets)
 
                         ticket_embed = discord.Embed(
-                            title="🎟️ Tickets Received 🎟️",
+                            title="<a:dr_zcash:1075563572924530729> Tickets Received <a:dr_zcash:1075563572924530729>",
                             description=f'{user.mention} received {tickets} tickets! Total tickets: {total_tickets}',
                             color=discord.Color.green()
                         )
