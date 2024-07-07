@@ -79,12 +79,13 @@ class Lottery(commands.Cog):
                     start_embed = discord.Embed(
                         title="<a:dr_zcash:1075563572924530729> Lottery Started! <a:dr_zcash:1075563572924530729>",
                         description=(
-                            "The lottery is starting now! Donate to participate.\n\n"
-                            "Each ticket costs 10,000 dank memer coins. "
-                            "The more tickets you get, the higher your chances of winning! "
-                            "All your tickets have numerical values, so don't worry about it bugging out! "
-                            "The prize will depend on how much money people spend on buying tickets. "
-                            "GOOD LUCK!"
+                            "<a:dr_zarrow:1075563743477497946>The lottery is starting now! Donate to participate.\n\n"
+                            "<a:dr_zarrow:1075563743477497946>Buy tickets in https://discord.com/channels/895344237204369458/1252643231888572516\n"
+                            "<a:dr_zarrow:1075563743477497946>Each ticket costs 10,000 dank memer coins.\n"
+                            "<a:dr_zarrow:1075563743477497946>The more tickets you get, the higher your chances of winning!\n "
+                            "<a:dr_zarrow:1075563743477497946>All your tickets have numerical values, so don't worry about it bugging out!\n "
+                            "<a:dr_zarrow:1075563743477497946>The prize will depend on how much money people spend on buying tickets.\n\n "
+                            "<a:dh_Gold_Dot:1235540381047717908> **GOOD LUCK** !<a:dh_Gold_Dot:1235540381047717908>"
                         ),
                         color=discord.Color.green()
                     )
@@ -125,8 +126,8 @@ class Lottery(commands.Cog):
                     color=discord.Color.gold()
                 )
                 winner_embed.add_field(name="They paid:", value=f"🪙 {winner_data['donation']:,} ({entries} entries)", inline=False)
-                winner_embed.add_field(name="<a:dr_zarrow:1075563743477497946> Users", value=f"{total_users}", inline=True)
-                winner_embed.add_field(name="<a:dr_zarrow:1075563743477497946> Total Tickets", value=f"{total_tickets}", inline=True)
+                winner_embed.add_field(name="<a:dr_zarrow:1075563743477497946> Users", value=f"{total_users}", inline=False)
+                winner_embed.add_field(name="<a:dr_zarrow:1075563743477497946> Total Tickets", value=f"{total_tickets}", inline=False)
                 winner_embed.set_thumbnail(url=winner.avatar.url)
                 winner_embed.set_footer(text="Built by renivier")
 
