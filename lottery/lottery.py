@@ -9,6 +9,7 @@ import json
 ELEMENT_BOT_ID = 957635842631950379
 LOTTERY_DURATION = 60 * 60 * 24
 PAYMENT_ROLE_ID = 1018578013140566137
+NOTIFICATION_ROLE_ID = 1198618127336996914
 
 class Lottery(commands.Cog):
     def __init__(self, bot):
@@ -76,15 +77,19 @@ class Lottery(commands.Cog):
                 channel = self.bot.get_channel(channel_id)
                 if channel:
                     start_embed = discord.Embed(
-                        title="Lottery Started!",
-                        description=("The lottery is starting now! Donate to participate.\n\n"
-                                     "Each ticket costs 10,000 dank memer coins, "
-                                     "the more tickets you get, the more chance you're going to have! "
-                                     "All your tickets have numeral values so don't worry about it bugging out! "
-                                     "The prize will depend on how much money people spend on buying tickets. "
-                                     "GOOD LUCK!"),
+                        title="🎟️ Lottery Started! 🎟️",
+                        description=(
+                            f"<@&{NOTIFICATION_ROLE_ID}>\n\n"
+                            "The lottery is starting now! Donate to participate.\n\n"
+                            "Each ticket costs 10,000 dank memer coins. "
+                            "The more tickets you get, the higher your chances of winning! "
+                            "All your tickets have numerical values, so don't worry about it bugging out! "
+                            "The prize will depend on how much money people spend on buying tickets. "
+                            "GOOD LUCK!"
+                        ),
                         color=discord.Color.green()
                     )
+                    start_embed.set_thumbnail(url="https://i.imgur.com/AfFp7pu.png")  # Example thumbnail, you can replace it
                     start_embed.set_footer(text="Built by renivier")
                     await channel.send(embed=start_embed)
 
@@ -114,28 +119,18 @@ class Lottery(commands.Cog):
             winner_channel = self.bot.get_channel(winner_channel_id)
             if winner_id and winner_channel:
                 winner = await self.bot.fetch_user(int(winner_id))
-                embed = discord.Embed(
+                entries = winner_data['donation'] // 10000
+                winner_embed = discord.Embed(
                     title="🎉 Lottery Winner 🎉",
                     description=f"{winner.mention} walked away with 💰 **{prize_amount:,}**",
                     color=discord.Color.gold()
                 )
-                entries = winner_data['donation'] // 10000
-                embed.add_field(name="They paid:", value=f"🪙 {winner_data['donation']:,} ({entries} entries)", inline=False)
-                embed.add_field(name="Profit:", value=f"{(prize_amount / winner_data['donation']):.2%}", inline=False)
-                
-                guild_data = self.load_guild_data()
-                user_ticket_data = [(user_id, user_data['tickets']) for user_id, user_data in guild_data.get(str(guild.id), {}).items()]
-                top_spenders = sorted(user_ticket_data, key=lambda x: x[1], reverse=True)[:3]
+                winner_embed.add_field(name="They paid:", value=f"🪙 {winner_data['donation']:,} ({entries} entries)", inline=False)
+                winner_embed.add_field(name="Profit:", value=f"{(prize_amount / winner_data['donation']):.2%}", inline=False)
+                winner_embed.set_thumbnail(url=winner.avatar.url)
+                winner_embed.set_footer(text="Built by renivier")
 
-                top_spenders_list = "\n".join([f"<@{user_id}>: {tickets:,} entries" for user_id, tickets in top_spenders])
-                if not top_spenders_list:
-                    top_spenders_list = "No top spenders"
-                embed.add_field(name="Top 3 Spenders:", value=top_spenders_list, inline=False)
-                
-                embed.set_thumbnail(url=winner.avatar.url)
-                embed.set_footer(text="Built by renivier")
-
-                await winner_channel.send(content=f"{winner.mention}", embed=embed)
+                await winner_channel.send(content=f"{winner.mention}", embed=winner_embed)
 
         if payout_channel_id:
             payout_channel = self.bot.get_channel(payout_channel_id)
@@ -160,7 +155,7 @@ class Lottery(commands.Cog):
                     if PAYMENT_ROLE_ID in [role.id for role in user.roles]:
                         updated_embed = payout_embed.copy()
                         updated_embed.title = "🏆 Payout Confirmed 🏆"
-                        updated_embed.description = f"Congratulations {winner.mention}!\n\nPaid by {user.mention}"
+                        updated_embed.description = f"Congratulations {winner.mention}!\n\nPayout Command\n```{payout_command}```\n\nPaid by {user.mention}"
                         await message.edit(embed=updated_embed)
                         await message.clear_reaction("⏳")
                         await message.add_reaction("👍")
@@ -230,7 +225,7 @@ class Lottery(commands.Cog):
     @commands.guild_only()
     async def set_payout_channel(self, ctx):
         await self.config.guild(ctx.guild).payout_channel_id.set(ctx.channel.id)
-        await ctx.send(f'This channel has been set for payout messages!!')
+        await ctx.send(f'This channel has been set for payout messages!')
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -262,7 +257,7 @@ class Lottery(commands.Cog):
                         total_tickets = await self.add_tickets(guild, user, tickets)
 
                         ticket_embed = discord.Embed(
-                            title="Tickets Received",
+                            title="🎟️ Tickets Received 🎟️",
                             description=f'{user.mention} received {tickets} tickets! Total tickets: {total_tickets}',
                             color=discord.Color.green()
                         )
