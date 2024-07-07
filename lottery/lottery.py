@@ -72,14 +72,13 @@ class Lottery(commands.Cog):
             start_time = datetime.utcnow()
             end_time = start_time + timedelta(seconds=duration)
             await self.config.guild(guild).end_time.set(end_time.isoformat())
-            channel_id = guild_config.get('channel_id')
+            channel_id = guild_config.get('winner_channel_id')  # Use winner_channel_id for the start embed
             if channel_id:
                 channel = self.bot.get_channel(channel_id)
                 if channel:
                     start_embed = discord.Embed(
-                        title="🎟️ Lottery Started! 🎟️",
+                        title="<a:dr_zcash:1075563572924530729> Lottery Started! <a:dr_zcash:1075563572924530729>",
                         description=(
-                            f"<@&{NOTIFICATION_ROLE_ID}>\n\n"
                             "The lottery is starting now! Donate to participate.\n\n"
                             "Each ticket costs 10,000 dank memer coins. "
                             "The more tickets you get, the higher your chances of winning! "
@@ -91,7 +90,7 @@ class Lottery(commands.Cog):
                     )
                     start_embed.set_thumbnail(url="https://i.imgur.com/AfFp7pu.png")  # Example thumbnail, you can replace it
                     start_embed.set_footer(text="Built by renivier")
-                    await channel.send(embed=start_embed)
+                    await channel.send(content=f"<@&{NOTIFICATION_ROLE_ID}>", embed=start_embed)  # Ping outside the embed
 
             await asyncio.sleep(duration)
             await self.end_lottery(guild)
@@ -122,12 +121,12 @@ class Lottery(commands.Cog):
                 entries = winner_data['donation'] // 10000
                 winner_embed = discord.Embed(
                     title="<a:dr_gaw:1233462035787022429> Lottery Winner <a:dr_gaw:1233462035787022429>",
-                    description=f"{winner.mention} walked away with <a:dr_zcash:1075563572924530729> **{prize_amount:,}**",
+                    description=f"{winner.mention} walked away with ⏣ **{prize_amount:,}**",
                     color=discord.Color.gold()
                 )
                 winner_embed.add_field(name="They paid:", value=f"🪙 {winner_data['donation']:,} ({entries} entries)", inline=False)
-                winner_embed.add_field(name="Total Users Participated:", value=f"{total_users}", inline=False)
-                winner_embed.add_field(name="Total Tickets Bought:", value=f"{total_tickets}", inline=False)
+                winner_embed.add_field(name="<a:dr_zarrow:1075563743477497946> Users", value=f"{total_users}", inline=True)
+                winner_embed.add_field(name="<a:dr_zarrow:1075563743477497946> Total Tickets", value=f"{total_tickets}", inline=True)
                 winner_embed.set_thumbnail(url=winner.avatar.url)
                 winner_embed.set_footer(text="Built by renivier")
 
@@ -156,7 +155,7 @@ class Lottery(commands.Cog):
                     if PAYMENT_ROLE_ID in [role.id for role in user.roles]:
                         updated_embed = payout_embed.copy()
                         updated_embed.title = "🏆 Payout Confirmed 🏆"
-                        updated_embed.description = f"Congratulations {winner.mention}!\n\nPayout Command\n```{payout_command}```\n\nPaid by {user.mention}"
+                        updated_embed.description = f"Congratulations {winner.mention}!\n\nPaid by {user.mention}"
                         await message.edit(embed=updated_embed)
                         await message.clear_reaction("⏳")
                         await message.add_reaction("👍")
