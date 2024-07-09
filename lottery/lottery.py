@@ -115,9 +115,16 @@ class Lottery(commands.Cog):
         winner_channel_id = guild_config.get('winner_channel_id')
         payout_channel_id = guild_config.get('payout_channel_id')
 
+        if winner_id is None:
+            if winner_channel_id:
+                winner_channel = self.bot.get_channel(winner_channel_id)
+                if winner_channel:
+                    await winner_channel.send("No valid entries were found for the lottery.")
+            return
+
         if winner_channel_id:
             winner_channel = self.bot.get_channel(winner_channel_id)
-            if winner_id and winner_channel:
+            if winner_channel:
                 winner = await self.bot.fetch_user(int(winner_id))
                 entries = winner_data['donation'] // 10000
                 winner_embed = discord.Embed(
