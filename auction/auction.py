@@ -9,7 +9,7 @@ import traceback
 
 logging.basicConfig(filename="auction.log", filemode="w", level=logging.INFO, format="%(asctime)s : %(levelname)s - %(message)s")
 
-DANK_MEMER_ID = 270904126974590976
+DANK_MEMER_ID = 270904126974590976  
 
 class Auction(commands.Cog):
     def __init__(self, bot):
@@ -131,7 +131,7 @@ class Auction(commands.Cog):
 
             item_count = int(item_count)
 
-            await self.api_check(interaction, item_count, item_name)
+            await self.cog.api_check(interaction, item_count, item_name)
 
             guild = interaction.guild
             overwrites = {
@@ -143,7 +143,7 @@ class Auction(commands.Cog):
             await ticket_channel.send(f"{interaction.user.mention}, please donate {item_count} of {item_name} as you have mentioned in the modal or you will get blacklisted.")
             await interaction.response.send_message("Auction details submitted! Please donate the items within 30 minutes.", ephemeral=True)
 
-            auction_id = await self.generate_auction_id()
+            auction_id = await self.cog.generate_auction_id()
 
             auction_data = {
                 auction_id: {
@@ -158,7 +158,7 @@ class Auction(commands.Cog):
                 }
             }
 
-            self.append_to_json(self.auction_data_file, str(auction_id), auction_data[auction_id])
+            self.cog.append_to_json(self.cog.auction_data_file, str(auction_id), auction_data[auction_id])
 
     @commands.Cog.listener()
     async def on_message_edit(self, before, after):
@@ -261,7 +261,7 @@ class Auction(commands.Cog):
     @commands.command()
     async def auction(self, ctx):
         logging.info("Received /auction command.")
-        await ctx.send_modal(self.AuctionModal())
+        await ctx.interaction.response.send_modal(self.AuctionModal(cog=self))
 
     def edit_bid(self, bids_data, auction_id, bidder_id, bid_amount):
         auction_bids = bids_data.setdefault(auction_id, {})
