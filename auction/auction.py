@@ -45,15 +45,10 @@ class Auction(commands.Cog):
             with open(file_name, 'r') as file:
                 file_data = json.load(file)
             
-            print(f"Loaded file data: {file_data}") 
-
             for item in file_data.items():
                 if int(item[0]) == int(identifier_key):
-                    print(f"Found matching item: {item}")
                     item[1].update(update_data)
                     break
-            
-            print(f"Updated file data: {file_data}")
 
             with open(file_name, 'w') as file:
                 json.dump(file_data, file, indent=4)
@@ -174,26 +169,33 @@ class Auction(commands.Cog):
                 if title != "Action Confirmed":
                     return
                 parts = desc.split("**")
-                item_dank = str(parts[1].split(">")[1])
-                amount_dank = int(parts[1].split("<")[0])
+                item_dank = parts[1].split(">")[1].strip()
+                amount_dank = int(parts[2].split("<")[0].strip())
+                
                 for auction_id, auction in auctions.items():
-                   if auction["item"].strip().lower() == item_dank.strip().lower() and int(auction["amount"]) == amount_dank and auction["status"]== "pending" and after.channel.id == auction["ticket_channel_id"]:
+                    print(f"Checking auction {auction_id}: {auction}")
+                    if (auction["item"].strip().lower() == item_dank.lower() and
+                        int(auction["amount"]) == amount_dank and
+                        auction["status"] == "pending" and
+                        after.channel.id == auction["ticket_channel_id"]):
+                        
                         auction["status"] = "active"
                         auction["end_time"] = int(time.time()) + 30 * 60  # Change to 30 minutes
                         update_data = {
                             "status": "active",
                             "end_time": auction["end_time"]
                         }
-                        print(f"Updating auction {auction['auction_id']} with {update_data}")  
+                        print(f"Updating auction {auction['auction_id']} with {update_data}")
                         self.update_json(self.auction_data_file, auction["auction_id"], update_data)
                         user = await self.bot.fetch_user(auction["user_id"])
-                        await after.channel.send(f"item_dank = {item_dank}, amount_dank= {amount_dank}")
+                        await after.channel.send(f"Item: {item_dank}, Amount: {amount_dank}")
                         await user.send("Thank you for your donation! Your auction will start shortly.")
                         ticket_channel = after.guild.get_channel(auction["ticket_channel_id"])
                         if ticket_channel:
                             await ticket_channel.delete()
                         await self.start_auction_announcement(after.guild, auction, auction["user_id"], auction["item"], auction["amount"])
                         return
+
                 await after.channel.send("The donated item or amount does not match the saved auction details.")
                 logging.info("Mismatch in donated item or amount.")
         except Exception as e:
