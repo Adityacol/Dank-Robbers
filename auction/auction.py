@@ -119,6 +119,10 @@ class Auction(commands.Cog):
             style=discord.TextStyle.short
         )
 
+        def __init__(self, cog):
+            super().__init__()
+            self.cog = cog
+
         async def on_submit(self, interaction: discord.Interaction):
             logging.info("Modal submitted.")
 
@@ -261,7 +265,9 @@ class Auction(commands.Cog):
     @commands.command()
     async def auction(self, ctx):
         logging.info("Received /auction command.")
-        await ctx.interaction.response.send_modal(self.AuctionModal(cog=self))
+        view = discord.ui.View()
+        view.add_item(AuctionButton(self))
+        await ctx.send("Click the button below to start an auction:", view=view)
 
     def edit_bid(self, bids_data, auction_id, bidder_id, bid_amount):
         auction_bids = bids_data.setdefault(auction_id, {})
@@ -297,3 +303,12 @@ class Auction(commands.Cog):
 
         bids_data = self.edit_bid(self.load_json(self.bid_data_file), auction_id, bidder_id, bid_amount)
         self.save_json(self.bid_data_file, bids_data)
+
+
+class AuctionButton(discord.ui.Button):
+    def __init__(self, cog):
+        super().__init__(label="Start Auction", style=discord.ButtonStyle.green)
+        self.cog = cog
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(self.cog.AuctionModal(cog=self.cog))
