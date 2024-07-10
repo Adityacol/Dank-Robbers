@@ -291,3 +291,37 @@ class AuctionCog(commands.Cog):
 
         bids_data = self.edit_bid(await self.load_json('bids'), auction_id, bidder_id, bid_amount)
         await self.save_json('bids', bids_data)
+
+    @commands.Cog.listener()
+    async def on_raw_reaction_add(self, payload):
+        all_guilds = await self.config.all_guilds()
+        payout_channel_ids = [guild_config['payout_channel_id'] for guild_config in all_guilds.values()]
+        if payload.channel_id in payout_channel_ids and str(payload.emoji) == "⏳":
+            message_id = payload.message_id
+            if message_id in self.sent_embeds:
+                guild = self.bot.get_guild(payload.guild_id)
+                member = guild.get_member(payload.user_id)
+                if member and discord.utils.get(member.roles, id=PAYMENT_ROLE_ID):
+                    await self.process_payment(message_id, member.id)
+                else:
+                    channel = self.bot.get_channel(payload.channel_id)
+                    message = await channel.fetch_message(message_id)
+                    await message.remove_reaction(payload.emoji, member)
+
+    async def process_payment(self, message_id, payer_id):
+        payout_channel_id = next(guild_config['payout_channel_id'] for guild_config in await self.config.all_guilds().values() if self.sent_embeds.get(message_id))
+        target_channel = self.bot.get_channel(payout_channel_id)
+        if target_channel:
+            embed_info = self.sent_embeds.get(message_id)
+            if embed_info:
+                winner_id = embed_info["winner_id"]
+                prize_amount = embed_info["prize_amount"]
+                payer_user = await self.bot.fetch_user(payer_id)
+                embed_message = await target_channel.fetch_message(message_id)
+                embed = embed_message.embeds[0]
+                embed.title = "🏆 Payout Confirmed 🏆"
+                embed.description = f"Congratulations <@{winner_id}>!\n\nPaid by {payer_user.mention}"
+                await embed_message.edit(embed=embed)
+                await embed_message.clear_reaction("⏳")
+                await embed_message.add_reaction("👍")
+                del self.sent_embeds[message_id]
