@@ -1,5 +1,5 @@
 import discord
-from redbot.core import commands, Config, checks
+from redbot.core import commands, Config, checks, data_manager
 import aiohttp
 import asyncio
 import logging
@@ -16,6 +16,8 @@ class AuctionCog(commands.Cog):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=1234567890, force_registration=True)
         self.config.register_global(**default_global)
+        self.auctions_path = data_manager.cog_data_path(self) / "auctions.json"
+        self.bids_path = data_manager.cog_data_path(self) / "bids.json"
         self.dank_memer_id = 270904126974590976
         logging.basicConfig(filename="test.log", filemode="w", level=logging.INFO, format="%(asctime)s : %(levelname)s - %(message)s")
 
