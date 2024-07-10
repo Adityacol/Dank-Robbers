@@ -1,117 +1,123 @@
 import discord
-from redbot.core import commands, Config, checks, data_manager
+from redbot.core import commands, Config, data_manager
+import json
 import aiohttp
 import asyncio
-import logging
 import time
+import logging
 import traceback
 
-default_global = {
-    "auctions": {},
-    "bids": {}
-}
+logging.basicConfig(filename="auction.log", filemode="w", level=logging.INFO, format="%(asctime)s : %(levelname)s - %(message)s")
 
-class AuctionCog(commands.Cog):
+DANK_MEMER_ID = 270904126974590976
+
+class Auction(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=1234567890, force_registration=True)
-        self.config.register_global(**default_global)
-        self.auctions_path = data_manager.cog_data_path(self) / "auctions.json"
-        self.bids_path = data_manager.cog_data_path(self) / "bids.json"
-        self.dank_memer_id = 270904126974590976
-        logging.basicConfig(filename="test.log", filemode="w", level=logging.INFO, format="%(asctime)s : %(levelname)s - %(message)s")
+        self.config.register_global(auctions={}, bids={})
+        self.auction_data_file = data_manager.cog_data_path(self) / "auctions.json"
+        self.bid_data_file = data_manager.cog_data_path(self) / "bids.json"
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        logging.info(f'Logged in as {self.bot.user}')
-
-    async def api_check(self, ctx, item_count, item_name):
+    async def api_check(self, interaction, item_count, item_name) -> None:
         async with aiohttp.ClientSession() as session:
             try:
                 async with session.get("https://api.gwapes.com/items") as response:
                     if response.status != 200:
-                        await ctx.send("Error fetching item value from API. Please try again later.")
-                        return False
+                        await interaction.response.send_message("Error fetching item value from API. Please try again later.", ephemeral=True)
+                        return
                     data = await response.json()
                     items = data.get("body", [])
                     item_data = next((item for item in items if item["name"].strip().lower() == item_name.strip().lower()), None)
                     if not item_data:
-                        await ctx.send("Item not found. Please enter a valid item name.")
-                        return False
+                        await interaction.response.send_message("Item not found. Please enter a valid item name.", ephemeral=True)
                     item_value = item_data.get("value", 0)
                     total_value = item_value * item_count
                     if total_value < 100000000:
-                        await ctx.send("The total donation value must be over 100 million.")
-                        return False
-                return True
+                        await interaction.response.send_message("The total donation value must be over 100 million.", ephemeral=True)
+                        return
             except Exception as e:
-                await ctx.send(f"An error occurred while fetching item value: {str(e)}")
-                return False
+                await interaction.response.send_message(f"An error occurred while fetching item value: {str(e)}", ephemeral=True)
+                return
 
-    async def update_json(self, identifier_key, update_data):
+    def update_json(self, file_name, identifier_key, update_data):
         try:
-            file_data = await self.config.global().auctions()
+            with open(file_name, 'r') as file:
+                file_data = json.load(file)
+            
+            print(f"Loaded file data: {file_data}") 
+
             for item in file_data.items():
                 if int(item[0]) == int(identifier_key):
+                    print(f"Found matching item: {item}")
                     item[1].update(update_data)
                     break
-            await self.config.global().auctions.set(file_data)
-        except Exception as e:
-            logging.error(f"Error updating JSON: {e}")
+            
+            print(f"Updated file data: {file_data}")
 
-    async def append_to_json(self, key, new_entry):
+            with open(file_name, 'w') as file:
+                json.dump(file_data, file, indent=4)
+                
+        except FileNotFoundError:
+            print(f"File {file_name} not found.")
+        except json.JSONDecodeError as je:
+            print(f"JSON decoding error in {file_name}: {je}")
+        except Exception as e:
+            print(f"Error updating JSON in {file_name}: {e}")
+            traceback.print_exc()
+
+    def append_to_json(self, file_path, key, new_entry):
         try:
-            data = await self.config.global().auctions()
+            data = self.load_json(file_path)
             data[key] = new_entry
-            await self.config.global().auctions.set(data)
+            with open(file_path, 'w') as f:
+                json.dump(data, f, indent=4)
         except Exception as e:
-            logging.error(f"Error appending to JSON: {e}")
+            print(f"Error appending to JSON file {file_path}: {e}")
 
-    async def load_json(self, file):
+    def load_json(self, file_path):
         try:
-            return await self.config.global().get_raw(file, default={})
-        except Exception as e:
-            logging.error(f"Error loading JSON: {e}")
-            return {}
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            data = {}
+        except json.JSONDecodeError as e:
+            print(f"Error decoding JSON in {file_path}: {e}")
+            data = {}
+        return data
 
-    async def save_json(self, file, data):
-        try:
-            await self.config.global().set_raw(file, value=data)
-        except Exception as e:
-            logging.error(f"Error saving JSON: {e}")
+    def save_json(self, file_path, data):
+        with open(file_path, 'w') as f:
+            json.dump(data, f, indent=4)
 
-    class AuctionModal(discord.ui.Modal):
-        def __init__(self, cog):
-            self.cog = cog
-            super().__init__(title="Request An Auction")
-
-            self.item_name = discord.ui.TextInput(
-                label="What are you going to donate?",
-                placeholder="e.g., Blob",
-                required=True,
-                min_length=1,
-                max_length=100,
-                style=discord.TextStyle.short
-            )
-            self.item_count = discord.ui.TextInput(
-                label="How many of those items will you donate?",
-                placeholder="e.g., 5",
-                required=True,
-                max_length=10
-            )
-            self.minimum_bid = discord.ui.TextInput(
-                label="What should the minimum bid be?",
-                placeholder="e.g., 1,000,000",
-                required=False,
-                style=discord.TextStyle.short
-            )
-            self.message = discord.ui.TextInput(
-                label="What is your message?",
-                placeholder="e.g., I love DR!",
-                required=False,
-                max_length=200,
-                style=discord.TextStyle.short
-            )
+    class AuctionModal(discord.ui.Modal, title="Request An Auction"):
+        item_name = discord.ui.TextInput(
+            label="What are you going to donate?",
+            placeholder="e.g., Blob",
+            required=True,
+            min_length=1,
+            max_length=100,
+            style=discord.TextStyle.short
+        )
+        item_count = discord.ui.TextInput(
+            label="How many of those items will you donate?",
+            placeholder="e.g., 5",
+            required=True,
+            max_length=10
+        )
+        minimum_bid = discord.ui.TextInput(
+            label="What should the minimum bid be?",
+            placeholder="e.g., 1,000,000",
+            required=False,
+            style=discord.TextStyle.short
+        )
+        message = discord.ui.TextInput(
+            label="What is your message?",
+            placeholder="e.g., I love DR!",
+            required=False,
+            max_length=200,
+            style=discord.TextStyle.short
+        )
 
         async def on_submit(self, interaction: discord.Interaction):
             logging.info("Modal submitted.")
@@ -125,20 +131,19 @@ class AuctionCog(commands.Cog):
 
             item_count = int(item_count)
 
-            if not await self.cog.api_check(interaction, item_count, item_name):
-                return
+            await self.api_check(interaction, item_count, item_name)
 
             guild = interaction.guild
             overwrites = {
                 guild.default_role: discord.PermissionOverwrite(read_messages=False),
                 interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-                self.cog.bot.user: discord.PermissionOverwrite(read_messages=True),
+                interaction.client.user: discord.PermissionOverwrite(read_messages=True),
             }
             ticket_channel = await guild.create_text_channel(f"ticket-{interaction.user.name}", overwrites=overwrites)
             await ticket_channel.send(f"{interaction.user.mention}, please donate {item_count} of {item_name} as you have mentioned in the modal or you will get blacklisted.")
             await interaction.response.send_message("Auction details submitted! Please donate the items within 30 minutes.", ephemeral=True)
 
-            auction_id = await self.cog.generate_auction_id()
+            auction_id = await self.generate_auction_id()
 
             auction_data = {
                 auction_id: {
@@ -153,13 +158,13 @@ class AuctionCog(commands.Cog):
                 }
             }
 
-            await self.cog.append_to_json(str(auction_id), auction_data[auction_id])
+            self.append_to_json(self.auction_data_file, str(auction_id), auction_data[auction_id])
 
     @commands.Cog.listener()
     async def on_message_edit(self, before, after):
         try:
-            if after.author.id == self.dank_memer_id and hasattr(after.interaction, "name") and after.interaction.name == "serverevents donate" and before.embeds != after.embeds:
-                auctions = await self.load_json('auctions')
+            if after.author.id == DANK_MEMER_ID and hasattr(after.interaction, "name") and after.interaction.name == "serverevents donate" and before.embeds != after.embeds:
+                auctions = self.load_json(self.auction_data_file)
                 title = after.embeds[0].title
                 desc = after.embeds[0].description
                 if title != "Action Confirmed":
@@ -168,14 +173,15 @@ class AuctionCog(commands.Cog):
                 item_dank = str(parts[1].split(">")[1])
                 amount_dank = int(parts[1].split("<")[0])
                 for auction_id, auction in auctions.items():
-                    if auction["item"].strip().lower() == item_dank.strip().lower() and int(auction["amount"]) == amount_dank and auction["status"] == "pending" and after.channel.id == auction["ticket_channel_id"]:
+                   if auction["item"].strip().lower() == item_dank.strip().lower() and int(auction["amount"]) == amount_dank and auction["status"]== "pending" and after.channel.id == auction["ticket_channel_id"]:
                         auction["status"] = "active"
-                        auction["end_time"] = int(time.time()) + 30 * 60
+                        auction["end_time"] = int(time.time()) + 30 * 60  # Change to 30 minutes
                         update_data = {
                             "status": "active",
                             "end_time": auction["end_time"]
                         }
-                        await self.update_json(auction["auction_id"], update_data)
+                        print(f"Updating auction {auction['auction_id']} with {update_data}")  
+                        self.update_json(self.auction_data_file, auction["auction_id"], update_data)
                         user = await self.bot.fetch_user(auction["user_id"])
                         await after.channel.send(f"item_dank = {item_dank}, amount_dank= {amount_dank}")
                         await user.send("Thank you for your donation! Your auction will start shortly.")
@@ -187,15 +193,16 @@ class AuctionCog(commands.Cog):
                 await after.channel.send("The donated item or amount does not match the saved auction details.")
                 logging.info("Mismatch in donated item or amount.")
         except Exception as e:
-            logging.error(f"An error occurred in on_message_edit: {e}")
+            print(f"An error occurred in on_message_edit: {e}")
+            traceback.print_exc()
 
     async def generate_auction_id(self) -> str:
-        auctions = await self.load_json('auctions')
+        auctions = self.load_json(self.auction_data_file)
         max_id = max((int(auction_id) for auction_id in auctions.keys()), default=0)
         return str(max_id + 1)
 
     async def run_auction(self, auction):
-        auction_channel = self.bot.get_channel(1250501101615190066)
+        auction_channel = self.bot.get_channel(1250501101615190066) 
         await asyncio.sleep(30 * 60)  # 30 minutes auction duration
         current_time = int(time.time())
         if current_time >= auction["end_time"]:
@@ -204,11 +211,11 @@ class AuctionCog(commands.Cog):
     async def start_auction_announcement(self, guild, auction, user_id, item, amount):
         auction_channel = guild.get_channel(1250501101615190066)  # Replace with the auction channel ID
         if not auction_channel:
-            auction_channel = await guild.create_text_channel("auction-channel-name")
+            auction_channel = await guild.create_text_channel("auction-channel-name")  # this line does nothing at all if u have a channel
         user = await self.bot.fetch_user(user_id)
         embed = discord.Embed(
             title="Auction Started!",
-            description=f"Item: {item}\nAmount: {amount}\nStarting Bid: {amount}\nDonated by {user.mention}\nAuction ID: {auction['auction_id']}\nDonor Message: {auction['message']}",
+            description=f"Item: {item}\nAmount: {amount}\nStarting Bid: {amount}\n donated by {user.mention}\n auction id: {auction['auction_id']}\n donor message: {auction['message']}",
             color=discord.Color.blue()
         )
         await auction_channel.send(embed=embed)
@@ -217,44 +224,44 @@ class AuctionCog(commands.Cog):
 
     async def end_auction(self, auction_channel, auction):
         auction["status"] = "ended"
-        await self.update_json(auction["auction_id"], {"status": "ended"})
-
-        bids = await self.load_json('bids')
+        self.update_json(self.auction_data_file, auction["auction_id"], {"status": "ended"})
+        
+        bids = self.load_json(self.bid_data_file)
         highest_bid = max(
-            bids.get(auction["auction_id"], {}).values(),
-            key=lambda x: x.get("amount", 0),
+            bids.get(auction["auction_id"], {}).values(), 
+            key=lambda x: x.get("amount", 0), 
             default=None
         )
-
+        
         if highest_bid:
             highest_bidder_id = highest_bid["user_id"]
             highest_bid_amount = highest_bid["amount"]
-
+            
             if highest_bidder_id is not None:
-                await auction_channel.send(f"Auction ended! The highest bid was {highest_bid_amount} by <@{highest_bidder_id}>. They have won the auction with the ID: {auction['auction_id']}!")
+                await auction_channel.send(f"Auction ended! The highest bid was {highest_bid_amount} by <@{highest_bidder_id}>. They have won the auction with the id:{auction['auction_id']}!")
                 winner = await self.bot.fetch_user(highest_bidder_id)
                 await winner.send(f"Congratulations! You won the auction with a bid of {highest_bid_amount}. Please donate the amount within 30 minutes.")
             else:
                 await auction_channel.send("Auction ended with no valid bids.")
         else:
             await auction_channel.send("Auction ended with no bids.")
-        await self.clear_auction(auction["auction_id"])
+        self.clear_auction(auction["auction_id"])
 
-    async def clear_auction(self, auction_id):
-        auctions = await self.load_json('auctions')
+    def clear_auction(self, auction_id):
+        auctions = self.load_json(self.auction_data_file)
         if auction_id in auctions:
             del auctions[auction_id]
-        await self.save_json('auctions', auctions)
+        self.save_json(self.auction_data_file, auctions)
 
-        bids = await self.load_json('bids')
+        bids = self.load_json(self.bid_data_file)
         if auction_id in bids:
             del bids[auction_id]
-        await self.save_json('bids', bids)
+        self.save_json(self.bid_data_file, bids)
 
     @commands.command()
-    @checks.admin_or_permissions(manage_channels=True)
     async def auction(self, ctx):
-        await ctx.send_modal(self.AuctionModal(self))
+        logging.info("Received /auction command.")
+        await ctx.send_modal(self.AuctionModal())
 
     def edit_bid(self, bids_data, auction_id, bidder_id, bid_amount):
         auction_bids = bids_data.setdefault(auction_id, {})
@@ -266,62 +273,27 @@ class AuctionCog(commands.Cog):
                 "user_id": bidder_id,
                 "amount": bid_amount
             }
-
+        
         return bids_data
 
     @commands.command()
-    @checks.admin_or_permissions(manage_channels=True)
     async def bid(self, ctx, bid_amount: int, auction_id: int):
         if bid_amount <= 0:
-            await ctx.send("Bid amount must be greater than 0.")
+            await ctx.send("Bid amount must be greater than 0.", ephemeral=True)
             return
 
         bidder_id = ctx.author.id
 
-        auctions = await self.load_json('auctions')
+        auctions = self.load_json(self.auction_data_file)
         active_auctions = {auction_id: auction_data for auction_id, auction_data in auctions.items() if auction_data['status'] == 'active'}
         if not active_auctions:
-            return await ctx.send("No active auctions found.")
+            return await ctx.send("No active auctions found.", ephemeral=True)
 
         auction_id = str(auction_id) or list(active_auctions.keys())[0]
         if auction_id not in active_auctions:
-            return await ctx.send("Invalid auction ID.")
+            return await ctx.send("Invalid auction ID.", ephemeral=True)
         else:
             await ctx.send(f"A bid of {bid_amount} has successfully been placed.")
 
-        bids_data = self.edit_bid(await self.load_json('bids'), auction_id, bidder_id, bid_amount)
-        await self.save_json('bids', bids_data)
-
-    @commands.Cog.listener()
-    async def on_raw_reaction_add(self, payload):
-        all_guilds = await self.config.all_guilds()
-        payout_channel_ids = [guild_config['payout_channel_id'] for guild_config in all_guilds.values()]
-        if payload.channel_id in payout_channel_ids and str(payload.emoji) == "⏳":
-            message_id = payload.message_id
-            if message_id in self.sent_embeds:
-                guild = self.bot.get_guild(payload.guild_id)
-                member = guild.get_member(payload.user_id)
-                if member and discord.utils.get(member.roles, id=PAYMENT_ROLE_ID):
-                    await self.process_payment(message_id, member.id)
-                else:
-                    channel = self.bot.get_channel(payload.channel_id)
-                    message = await channel.fetch_message(message_id)
-                    await message.remove_reaction(payload.emoji, member)
-
-    async def process_payment(self, message_id, payer_id):
-        payout_channel_id = next(guild_config['payout_channel_id'] for guild_config in await self.config.all_guilds().values() if self.sent_embeds.get(message_id))
-        target_channel = self.bot.get_channel(payout_channel_id)
-        if target_channel:
-            embed_info = self.sent_embeds.get(message_id)
-            if embed_info:
-                winner_id = embed_info["winner_id"]
-                prize_amount = embed_info["prize_amount"]
-                payer_user = await self.bot.fetch_user(payer_id)
-                embed_message = await target_channel.fetch_message(message_id)
-                embed = embed_message.embeds[0]
-                embed.title = "🏆 Payout Confirmed 🏆"
-                embed.description = f"Congratulations <@{winner_id}>!\n\nPaid by {payer_user.mention}"
-                await embed_message.edit(embed=embed)
-                await embed_message.clear_reaction("⏳")
-                await embed_message.add_reaction("👍")
-                del self.sent_embeds[message_id]
+        bids_data = self.edit_bid(self.load_json(self.bid_data_file), auction_id, bidder_id, bid_amount)
+        self.save_json(self.bid_data_file, bids_data)
