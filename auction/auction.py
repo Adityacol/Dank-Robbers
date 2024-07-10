@@ -16,8 +16,8 @@ class Auction(commands.Cog):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=1234567890, force_registration=True)
         self.config.register_global(auctions={}, bids={})
-        self.auction_data_file = data_manager.cog_data_path(self) / "auctions.json"
-        self.bid_data_file = data_manager.cog_data_path(self) / "bids.json"
+        self.auction_data_file = data_manager.cog_data_path(self) / "auction.json"
+        self.bid_data_file = data_manager.cog_data_path(self) / "bid.json"
 
     async def api_check(self, interaction, item_count, item_name) -> None:
         async with aiohttp.ClientSession() as session:
@@ -220,10 +220,11 @@ class Auction(commands.Cog):
             auction_channel = await guild.create_text_channel("auction-channel-name")  # this line does nothing at all if u have a channel
         user = await self.bot.fetch_user(user_id)
         embed = discord.Embed(
-            title="Auction Started!",
-            description=f"Item: {item}\nAmount: {amount}\nStarting Bid: {amount}\n donated by {user.mention}\n auction id: {auction['auction_id']}\n donor message: {auction['message']}",
+            title="🎉 Auction Started! 🎉",
+            description=f"**Item**: {item}\n**Amount**: {amount}\n**Starting Bid**: {amount}\n**Donated by**: {user.mention}\n**Auction ID**: {auction['auction_id']}\n**Message**: {auction['message']}",
             color=discord.Color.blue()
         )
+        embed.set_thumbnail(url=user.avatar.url)
         await auction_channel.send(embed=embed)
         await asyncio.create_task(self.run_auction(auction))
         await auction_channel.set_permissions(auction_channel.guild.default_role, read_messages=True, send_messages=True)
@@ -244,9 +245,15 @@ class Auction(commands.Cog):
             highest_bid_amount = highest_bid["amount"]
             
             if highest_bidder_id is not None:
-                await auction_channel.send(f"Auction ended! The highest bid was {highest_bid_amount} by <@{highest_bidder_id}>. They have won the auction with the id:{auction['auction_id']}!")
+                embed = discord.Embed(
+                    title="🏆 Auction Ended! 🏆",
+                    description=f"**The highest bid was {highest_bid_amount} by <@{highest_bidder_id}>.**\nThey have won the auction with the ID: {auction['auction_id']}!",
+                    color=discord.Color.gold()
+                )
+                embed.set_thumbnail(url=self.bot.user.avatar.url)
+                await auction_channel.send(embed=embed)
                 winner = await self.bot.fetch_user(highest_bidder_id)
-                await winner.send(f"Congratulations! You won the auction with a bid of {highest_bid_amount}. Please donate the amount within 30 minutes.")
+                await winner.send(f"🎉 Congratulations! You won the auction with a bid of {highest_bid_amount}. Please donate the amount within 30 minutes.")
             else:
                 await auction_channel.send("Auction ended with no valid bids.")
         else:
