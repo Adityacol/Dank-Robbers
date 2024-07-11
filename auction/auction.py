@@ -9,7 +9,7 @@ import traceback
 
 logging.basicConfig(filename="auction.log", filemode="w", level=logging.INFO, format="%(asctime)s : %(levelname)s - %(message)s")
 
-DANK_MEMER_ID = 270904126974590976  
+DANK_MEMER_ID = 270904126974590976
 
 class Auction(commands.Cog):
     def __init__(self, bot):
@@ -31,6 +31,7 @@ class Auction(commands.Cog):
                     item_data = next((item for item in items if item["name"].strip().lower() == item_name.strip().lower()), None)
                     if not item_data:
                         await interaction.response.send_message("Item not found. Please enter a valid item name.", ephemeral=True)
+                        return
                     item_value = item_data.get("value", 0)
                     total_value = item_value * item_count
                     if total_value < 100000000:
@@ -44,15 +45,9 @@ class Auction(commands.Cog):
         try:
             with open(file_name, 'r') as file:
                 file_data = json.load(file)
-            
-            for item in file_data.items():
-                if int(item[0]) == int(identifier_key):
-                    item[1].update(update_data)
-                    break
-
+            file_data[identifier_key].update(update_data)
             with open(file_name, 'w') as file:
                 json.dump(file_data, file, indent=4)
-                
         except FileNotFoundError:
             print(f"File {file_name} not found.")
         except json.JSONDecodeError as je:
@@ -173,19 +168,17 @@ class Auction(commands.Cog):
                 amount_dank = int(parts[2].split("<")[0].strip())
                 
                 for auction_id, auction in auctions.items():
-                    print(f"Checking auction {auction_id}: {auction}")
                     if (auction["item"].strip().lower() == item_dank.lower() and
                         int(auction["amount"]) == amount_dank and
                         auction["status"] == "pending" and
                         after.channel.id == auction["ticket_channel_id"]):
                         
                         auction["status"] = "active"
-                        auction["end_time"] = int(time.time()) + 30 * 60  # Change to 30 minutes
+                        auction["end_time"] = int(time.time()) + 30 * 60  
                         update_data = {
                             "status": "active",
                             "end_time": auction["end_time"]
                         }
-                        print(f"Updating auction {auction['auction_id']} with {update_data}")
                         self.update_json(self.auction_data_file, auction["auction_id"], update_data)
                         user = await self.bot.fetch_user(auction["user_id"])
                         await after.channel.send(f"Item: {item_dank}, Amount: {amount_dank}")
@@ -208,116 +201,71 @@ class Auction(commands.Cog):
         return str(max_id + 1)
 
     async def run_auction(self, auction):
-        auction_channel = self.bot.get_channel(1250501101615190066) 
-        await asyncio.sleep(30 * 60)  # 30 minutes auction duration
+        auction_channel = self.bot.get_channel(1250501101615190066)
+        await asyncio.sleep(30 * 60)  
         current_time = int(time.time())
         if current_time >= auction["end_time"]:
             await self.end_auction(auction_channel, auction)
 
     async def start_auction_announcement(self, guild, auction, user_id, item, amount):
-        auction_channel = guild.get_channel(1250501101615190066)  # Replace with the auction channel ID
+        auction_channel = guild.get_channel(1250501101615190066)
         if not auction_channel:
-            auction_channel = await guild.create_text_channel("auction-channel-name")  # this line does nothing at all if u have a channel
+            auction_channel = await guild.create_text_channel("auction-channel-name")
         user = await self.bot.fetch_user(user_id)
         embed = discord.Embed(
             title="🎉 Auction Started! 🎉",
-            description=f"**Item**: {item}\n**Amount**: {amount}\n**Starting Bid**: {amount}\n**Donated by**: {user.mention}\n**Auction ID**: {auction['auction_id']}\n**Message**: {auction['message']}",
+            description=f"**Item**: {item}\n**Amount**: {amount}\n**Starting Bid**: {auction['min_bid']}\n**Donated by**: {user.mention}\n\nPlace your bids by typing them in this channel!",
             color=discord.Color.blue()
         )
-        embed.set_thumbnail(url=user.avatar.url)
         await auction_channel.send(embed=embed)
-        await asyncio.create_task(self.run_auction(auction))
-        await auction_channel.set_permissions(auction_channel.guild.default_role, read_messages=True, send_messages=True)
+        asyncio.create_task(self.run_auction(auction))
 
     async def end_auction(self, auction_channel, auction):
-        auction["status"] = "ended"
-        self.update_json(self.auction_data_file, auction["auction_id"], {"status": "ended"})
-        
-        bids = self.load_json(self.bid_data_file)
-        highest_bid = max(
-            bids.get(auction["auction_id"], {}).values(), 
-            key=lambda x: x.get("amount", 0), 
-            default=None
-        )
-        
-        if highest_bid:
-            highest_bidder_id = highest_bid["user_id"]
-            highest_bid_amount = highest_bid["amount"]
-            
-            if highest_bidder_id is not None:
-                embed = discord.Embed(
-                    title="🏆 Auction Ended! 🏆",
-                    description=f"**The highest bid was {highest_bid_amount} by <@{highest_bidder_id}>.**\nThey have won the auction with the ID: {auction['auction_id']}!",
-                    color=discord.Color.gold()
-                )
-                embed.set_thumbnail(url=self.bot.user.avatar.url)
-                await auction_channel.send(embed=embed)
-                winner = await self.bot.fetch_user(highest_bidder_id)
-                await winner.send(f"🎉 Congratulations! You won the auction with a bid of {highest_bid_amount}. Please donate the amount within 30 minutes.")
-            else:
-                await auction_channel.send("Auction ended with no valid bids.")
-        else:
-            await auction_channel.send("Auction ended with no bids.")
-        self.clear_auction(auction["auction_id"])
-
-    def clear_auction(self, auction_id):
-        auctions = self.load_json(self.auction_data_file)
-        if auction_id in auctions:
-            del auctions[auction_id]
-        self.save_json(self.auction_data_file, auctions)
-
-        bids = self.load_json(self.bid_data_file)
-        if auction_id in bids:
-            del bids[auction_id]
-        self.save_json(self.bid_data_file, bids)
+        try:
+            bids = self.load_json(self.bid_data_file).get(auction["auction_id"], [])
+            if not bids:
+                await auction_channel.send("No bids were placed for this auction. The auction has ended with no winner.")
+                return
+            highest_bid = max(bids, key=lambda bid: int(bid["bid_amount"]))
+            winner_id = highest_bid["user_id"]
+            winner = await self.bot.fetch_user(winner_id)
+            embed = discord.Embed(
+                title="🎉 Auction Ended! 🎉",
+                description=f"The auction for {auction['amount']} {auction['item']} has ended.\n\n**Winner**: {winner.mention}\n**Winning Bid**: {highest_bid['bid_amount']}",
+                color=discord.Color.gold()
+            )
+            await auction_channel.send(embed=embed)
+        except Exception as e:
+            await auction_channel.send(f"An error occurred while ending the auction: {str(e)}")
+            traceback.print_exc()
 
     @commands.command()
-    async def auction(self, ctx):
-        logging.info("Received /auction command.")
-        view = discord.ui.View()
-        view.add_item(AuctionButton(self))
-        await ctx.send("Click the button below to start an auction:", view=view)
-
-    def edit_bid(self, bids_data, auction_id, bidder_id, bid_amount):
-        auction_bids = bids_data.setdefault(auction_id, {})
-
-        if bidder_id in auction_bids:
-            auction_bids[bidder_id]["amount"] = bid_amount
-        else:
-            auction_bids[bidder_id] = {
-                "user_id": bidder_id,
-                "amount": bid_amount
-            }
-        
-        return bids_data
+    async def submit_auction(self, ctx):
+        try:
+            modal = self.AuctionModal(self)
+            await ctx.send_modal(modal)
+        except Exception as e:
+            print(f"An error occurred in submit_auction: {e}")
+            traceback.print_exc()
 
     @commands.command()
-    async def bid(self, ctx, bid_amount: int, auction_id: int):
-        if bid_amount <= 0:
-            await ctx.send("Bid amount must be greater than 0.", ephemeral=True)
-            return
+    async def bid(self, ctx, auction_id: str, amount: str):
+        try:
+            if not amount.isdigit() or int(amount) <= 0:
+                await ctx.send("Please enter a valid bid amount.")
+                return
+            bids = self.load_json(self.bid_data_file)
+            auction_bids = bids.get(auction_id, [])
+            auction_bids.append({
+                "user_id": ctx.author.id,
+                "bid_amount": amount
+            })
+            bids[auction_id] = auction_bids
+            self.save_json(self.bid_data_file, bids)
+            await ctx.send(f"Bid of {amount} placed by {ctx.author.mention} for auction {auction_id}!")
+        except Exception as e:
+            await ctx.send(f"An error occurred while placing the bid: {str(e)}")
+            traceback.print_exc()
 
-        bidder_id = ctx.author.id
-
-        auctions = self.load_json(self.auction_data_file)
-        active_auctions = {auction_id: auction_data for auction_id, auction_data in auctions.items() if auction_data['status'] == 'active'}
-        if not active_auctions:
-            return await ctx.send("No active auctions found.", ephemeral=True)
-
-        auction_id = str(auction_id) or list(active_auctions.keys())[0]
-        if auction_id not in active_auctions:
-            return await ctx.send("Invalid auction ID.", ephemeral=True)
-        else:
-            await ctx.send(f"A bid of {bid_amount} has successfully been placed.")
-
-        bids_data = self.edit_bid(self.load_json(self.bid_data_file), auction_id, bidder_id, bid_amount)
-        self.save_json(self.bid_data_file, bids_data)
-
-
-class AuctionButton(discord.ui.Button):
-    def __init__(self, cog):
-        super().__init__(label="Start Auction", style=discord.ButtonStyle.green)
-        self.cog = cog
-
-    async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(self.cog.AuctionModal(cog=self.cog))
+async def setup(bot):
+    await bot.add_cog(Auction(bot))
