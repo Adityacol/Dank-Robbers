@@ -139,7 +139,7 @@ class Lottery(commands.Cog):
                 winner_embed.set_footer(text="Built by renivier")
 
                 await winner_channel.send(content=f"{winner.mention}", embed=winner_embed)
-                await self.start_lottery(guild)
+                
 
         if payout_channel_id:
             payout_channel = self.bot.get_channel(payout_channel_id)
@@ -199,8 +199,10 @@ class Lottery(commands.Cog):
         # Clear the guild_tickets.json file
         self.clear_guild_tickets()
         print(f"Guild Data After Draw: {self.load_guild_data()}")
+        await self.start_lottery(guild)
 
         return winner_id, winner_data, prize_amount, total_tickets, total_users
+        
 
     def clear_guild_tickets(self):
         print("Clearing guild tickets...")
