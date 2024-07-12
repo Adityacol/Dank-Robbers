@@ -199,7 +199,6 @@ class Lottery(commands.Cog):
         # Clear the guild_tickets.json file
         self.clear_guild_tickets()
         print(f"Guild Data After Draw: {self.load_guild_data()}")
-        await self.start_lottery(guild)
 
         return winner_id, winner_data, prize_amount, total_tickets, total_users
         
