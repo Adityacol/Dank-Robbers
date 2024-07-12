@@ -91,7 +91,7 @@ class Lottery(commands.Cog):
                     )
                     start_embed.set_thumbnail(url="https://i.imgur.com/AfFp7pu.png")  # Example thumbnail, you can replace it
                     start_embed.set_footer(text="Built by renivier")
-                    await channel.send(content=f"<@&{NOTIFICATION_ROLE_ID}>", embed=start_embed, mention=True)  # Ping outside the embed
+                    await channel.send(content=f"<@&{NOTIFICATION_ROLE_ID}>", embed=start_embed)  # Ping outside the embed
 
             await asyncio.sleep(duration)
             await self.end_lottery(guild)
@@ -139,6 +139,7 @@ class Lottery(commands.Cog):
                 winner_embed.set_footer(text="Built by renivier")
 
                 await winner_channel.send(content=f"{winner.mention}", embed=winner_embed)
+                await self.end_lottery(guild)
                 
 
         if payout_channel_id:
