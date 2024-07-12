@@ -5,6 +5,8 @@ import random
 import asyncio
 from datetime import datetime, timedelta
 import json
+from discord import AllowedMentions
+
 
 ELEMENT_BOT_ID = 957635842631950379
 LOTTERY_DURATION = 60 * 60 * 24
@@ -76,9 +78,7 @@ class Lottery(commands.Cog):
             if channel_id:
                 channel = self.bot.get_channel(channel_id)
                 if channel:
-                    role = guild.get_role(NOTIFICATION_ROLE_ID)
-                    if not role.mentionable:
-                        await role.edit(mentionable=True)
+                    allowed_mentions = AllowedMentions(roles=[NOTIFICATION_ROLE_ID])
                     start_embed = discord.Embed(
                         title="<a:dr_zcash:1075563572924530729> Lottery Started! <a:dr_zcash:1075563572924530729>",
                         description=(
@@ -94,7 +94,7 @@ class Lottery(commands.Cog):
                     )
                     start_embed.set_thumbnail(url="https://i.imgur.com/AfFp7pu.png")  # Example thumbnail, you can replace it
                     start_embed.set_footer(text="Built by renivier")
-                    await channel.send(content=f"{role.mention}", embed=start_embed,)  # Ping outside the embed
+                    await channel.send(content=f"<@&{NOTIFICATION_ROLE_ID}>", embed=start_embed,)  # Ping outside the embed
 
             await asyncio.sleep(duration)
             await self.end_lottery(guild)
