@@ -76,6 +76,7 @@ class Lottery(commands.Cog):
             if channel_id:
                 channel = self.bot.get_channel(channel_id)
                 if channel:
+                    notification_role = guild.get_role(NOTIFICATION_ROLE_ID)
                     start_embed = discord.Embed(
                         title="<a:dr_zcash:1075563572924530729> Lottery Started! <a:dr_zcash:1075563572924530729>",
                         description=(
@@ -91,7 +92,7 @@ class Lottery(commands.Cog):
                     )
                     start_embed.set_thumbnail(url="https://i.imgur.com/AfFp7pu.png")  # Example thumbnail, you can replace it
                     start_embed.set_footer(text="Built by renivier")
-                    await channel.send(content=f"<@&{NOTIFICATION_ROLE_ID}>", embed=start_embed, mention=True)  # Ping outside the embed
+                    await channel.send(content=f"{notification_role.mention}", embed=start_embed,)  # Ping outside the embed
 
             await asyncio.sleep(duration)
             await self.end_lottery(guild)
