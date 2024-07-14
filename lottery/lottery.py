@@ -145,6 +145,7 @@ class Lottery(commands.Cog):
 
                 await winner_channel.send(content=f"{winner.mention}", embed=winner_embed)
                 await self.end_lottery(guild)
+                await self.start_lottery(guild, LOTTERY_DURATION)
                 
 
         if payout_channel_id:
