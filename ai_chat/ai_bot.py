@@ -1,18 +1,18 @@
 from redbot.core import commands, Config
 import discord
-import aiohttp
+import requests
+import json
 import random
 
 # Replace 'YOUR_EDEN_API_TOKEN' with your actual Eden AI API token
-EDEN_API_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMzk3MmY1NGItNzc5YS00ZTViLWJkYmYtOTE1MGUxNGM1NjBkIiwidHlwZSI6ImFwaV90b2tlbiJ9.bjgAORT4d0l-mNwAfj9LD7vnkqGX5WSKe_DWo6h01is'
+EDEN_API_TOKEN = 'YOUR_EDEN_API_TOKEN'
 
 class AdvancedAIChatBotCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=1234567890)
-        self.session = aiohttp.ClientSession()
         self.conversations = {}
-        
+
         # Define mood responses
         self.mood_responses = {
             'happy': {
@@ -186,26 +186,25 @@ class AdvancedAIChatBotCog(commands.Cog):
 
         return response
 
-    async def chat_completion(self, prompt, user_id, language='en'):
+    def chat_completion(self, prompt, user_id, language='en'):
         # Replace with your Eden AI service's API call
-        # Here we simulate a call with a dummy response
-        api_url = "https://api.edenai.run/v1/openai/chat/completions"
+        api_url = "https://api.edenai.run/v2/text/chat"
         headers = {
             "Authorization": f"Bearer {EDEN_API_TOKEN}",
             "Content-Type": "application/json"
         }
         payload = {
-            "model": "gpt-3.5-turbo",
-            "messages": [{"role": "user", "content": prompt}],
-            "user_id": user_id,
-            "language": language
+            "providers": "openai",
+            "text": prompt,
+            "chatbot_global_action": "Act as an assistant",
+            "previous_history": [],  # Modify if needed
+            "temperature": 0.0,
+            "max_tokens": 150,
         }
-        async with self.session.post(api_url, headers=headers, json=payload) as resp:
-            if resp.status == 200:
-                result = await resp.json()
-                return result.get("choices", [{}])[0].get("message", "I couldn't generate a response.")
-            else:
-                return f'Error: {resp.status} - {await resp.text()}'
+        response = requests.post(api_url, json=payload, headers=headers)
+        result = response.json()
+
+        return result.get('openai', {}).get('generated_text', "I couldn't generate a response.")
 
     def learn_from_interaction(self, conversation):
         # TODO: Implement learning logic based on user interaction
@@ -218,8 +217,7 @@ class AdvancedAIChatBotCog(commands.Cog):
             "My developer programmed me to ignore bad words. Better luck next time!",
             "Is that the best insult you can come up with? I'm disappointed!",
             "Sorry, I don't speak bad word language. Try again with something creative!",
-            "Oh Really You dumb human you thought you will abuse me you are really dumb "
-            "Accha bete baap ko sikah raha hai"
+            "Oh Really You dumb human you thought you will abuse me you are really dumb Accha bete baap ko sikah raha hai"
         ]
         return random.choice(replies)
 
