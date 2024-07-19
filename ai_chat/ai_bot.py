@@ -189,7 +189,7 @@ class AdvancedAIChatBotCog(commands.Cog):
         # Replace the URL and headers with your actual API details
         api_url = "https://api.edenai.run/v1/openai/chat/completions"
         headers = {
-            "Authorization": f"Bearer YOUR_EDEN_AI_API_KEY",
+            "Authorization": f"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMzk3MmY1NGItNzc5YS00ZTViLWJkYmYtOTE1MGUxNGM1NjBkIiwidHlwZSI6ImFwaV90b2tlbiJ9.bjgAORT4d0l-mNwAfj9LD7vnkqGX5WSKe_DWo6h01is",
             "Content-Type": "application/json"
         }
         payload = {
