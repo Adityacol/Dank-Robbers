@@ -5,9 +5,13 @@ import random
 import asyncio
 from datetime import datetime, timedelta
 import json
+from discord import AllowedMentions
+
 
 ELEMENT_BOT_ID = 957635842631950379
 LOTTERY_DURATION = 60 * 60 * 24
+PAYMENT_ROLE_ID = 1018578013140566137
+NOTIFICATION_ROLE_ID = 1198618127336996914
 
 class Lottery(commands.Cog):
     def __init__(self, bot):
@@ -16,11 +20,14 @@ class Lottery(commands.Cog):
         self.config.register_guild(
             channel_id=None,
             end_time=None,
-            start_time=None
+            start_time=None,
+            winner_channel_id=None,
+            payout_channel_id=None
         )
         self.tickets_path = data_manager.cog_data_path(self) / "guild_tickets.json"
         print(f"Tickets path: {self.tickets_path}")
         self.lottery_running = set()
+        self.sent_embeds = {}  # Dictionary to keep track of sent embeds
         self.start_lottery_task.start()
 
     def cog_unload(self):
@@ -67,22 +74,29 @@ class Lottery(commands.Cog):
             start_time = datetime.utcnow()
             end_time = start_time + timedelta(seconds=duration)
             await self.config.guild(guild).end_time.set(end_time.isoformat())
-            channel_id = guild_config.get('channel_id')
+            channel_id = guild_config.get('winner_channel_id')  # Use winner_channel_id for the start embed
             if channel_id:
                 channel = self.bot.get_channel(channel_id)
                 if channel:
+                    # Fetch the role object using the ID
+                    role = guild.get_role(NOTIFICATION_ROLE_ID)
+                    allowed_mentions = AllowedMentions(roles=[role]) if role else None
                     start_embed = discord.Embed(
-                        title="Lottery Started!",
-                        description=("The lottery is starting now! Donate to participate.\n\n"
-                                     "Each ticket costs 10,000 dank memer coins, "
-                                     "the more tickets you get, the more chance you're going to have! "
-                                     "All your tickets have numeral values so don't worry about it bugging out! "
-                                     "The prize will depend on how much money people spend on buying tickets. "
-                                     "GOOD LUCK!"),
+                        title="<a:dr_zcash:1075563572924530729> Lottery Started! <a:dr_zcash:1075563572924530729>",
+                        description=(
+                            "<a:dr_zarrow:1075563743477497946>The lottery is starting now! Donate to participate.\n\n"
+                            "<a:dr_zarrow:1075563743477497946>Buy tickets in https://discord.com/channels/895344237204369458/1252643231888572516\n"
+                            "<a:dr_zarrow:1075563743477497946>Each ticket costs 10,000 dank memer coins.\n"
+                            "<a:dr_zarrow:1075563743477497946>The more tickets you get, the higher your chances of winning!\n "
+                            "<a:dr_zarrow:1075563743477497946>All your tickets have numerical values, so don't worry about it bugging out!\n "
+                            "<a:dr_zarrow:1075563743477497946>The prize will depend on how much money people spend on buying tickets.\n\n "
+                            "<a:dh_Gold_Dot:1235540381047717908> **GOOD LUCK** !<a:dh_Gold_Dot:1235540381047717908>"
+                        ),
                         color=discord.Color.green()
                     )
+                    start_embed.set_thumbnail(url="https://i.imgur.com/AfFp7pu.png")  # Example thumbnail, you can replace it
                     start_embed.set_footer(text="Built by renivier")
-                    await channel.send(embed=start_embed)
+                    await channel.send(content=f"<@&{NOTIFICATION_ROLE_ID}>", embed=start_embed, allowed_mentions=allowed_mentions)
 
             await asyncio.sleep(duration)
             await self.end_lottery(guild)
@@ -101,55 +115,88 @@ class Lottery(commands.Cog):
             self.lottery_running.remove(guild.id)
 
         await self.config.guild(guild).end_time.clear()
-        winner_id, winner_data, prize_amount = await self.draw_winner(guild)
+        winner_id, winner_data, prize_amount, total_tickets, total_users = await self.draw_winner(guild)
         guild_config = await self.config.guild(guild).all()
-        channel_id = guild_config.get('channel_id')
+        winner_channel_id = guild_config.get('winner_channel_id')
+        payout_channel_id = guild_config.get('payout_channel_id')
+        
+        if winner_id is None:
+            if winner_channel_id:
+                winner_channel = self.bot.get_channel(winner_channel_id)
+                if winner_channel:
+                    await winner_channel.send("No valid entries were found for the lottery.")
+            return
 
-        if channel_id:
-            channel = self.bot.get_channel(channel_id)
-            if winner_id and channel:
+        if winner_channel_id:
+            winner_channel = self.bot.get_channel(winner_channel_id)
+            if winner_channel:
                 winner = await self.bot.fetch_user(int(winner_id))
+                entries = winner_data['donation'] // 10000
                 winner_embed = discord.Embed(
-                    title="Lottery Winner!",
-                    description=f'Congratulations {winner.mention}, you have won the lottery with one of your tickets! You have won {prize_amount} coins!',
+                    title="<a:dr_gaw:1233462035787022429> Lottery Winner <a:dr_gaw:1233462035787022429>",
+                    description=f"{winner.mention} walked away with ⏣ **{prize_amount:,}**",
                     color=discord.Color.gold()
                 )
+                winner_embed.add_field(name="They paid:", value=f"🪙 {winner_data['donation']:,} ({entries} entries)", inline=False)
+                winner_embed.add_field(name="<a:dr_zarrow:1075563743477497946> Users", value=f"<:bluedot:1233471404884885545> {total_users}", inline=False)
+                winner_embed.add_field(name="<a:dr_zarrow:1075563743477497946> Total Tickets", value=f"<:bluedot:1233471404884885545> {total_tickets}", inline=False)
                 winner_embed.set_thumbnail(url=winner.avatar.url)
                 winner_embed.set_footer(text="Built by renivier")
-                await channel.send(embed=winner_embed)
 
-                end_embed = discord.Embed(
-                    title="Lottery Ended",
-                    description="The lottery has ended and the winner has been drawn! You can now donate for the next round.",
-                    color=discord.Color.purple()
+                await winner_channel.send(content=f"{winner.mention}", embed=winner_embed)
+                await self.end_lottery(guild)
+                await self.start_lottery(guild, LOTTERY_DURATION)
+                
+
+        if payout_channel_id:
+            payout_channel = self.bot.get_channel(payout_channel_id)
+            if payout_channel:
+                payout_command = f"/serverevents payout user:{winner.id} quantity:{prize_amount}"
+                payout_embed = discord.Embed(
+                    title="🏆 Payout Command 🏆",
+                    description=f"Congratulations {winner.mention}!\n\nPayout Command\n```{payout_command}```",
+                    color=discord.Color.blue()
                 )
-                end_embed.set_footer(text="Built by renivier")
-                await channel.send(embed=end_embed)
-            else:
-                no_tickets_embed = discord.Embed(
-                    title="No Tickets Purchased",
-                    description="No tickets were purchased in this lottery round.",
-                    color=discord.Color.red()
-                )
-                no_tickets_embed.set_footer(text="Built by renivier")
-                await channel.send(embed=no_tickets_embed)
+                payout_embed.set_footer(text="Lottery Winner")
+
+                message = await payout_channel.send(embed=payout_embed)
+                self.sent_embeds[message.id] = {"winner_id": winner.id, "prize_amount": prize_amount}
+                await message.add_reaction("⏳")
+
+                def check(reaction, user):
+                    return user != self.bot.user and str(reaction.emoji) == "⏳" and reaction.message.id == message.id
+
+                while True:
+                    reaction, user = await self.bot.wait_for("reaction_add", check=check)
+                    if PAYMENT_ROLE_ID in [role.id for role in user.roles]:
+                        updated_embed = payout_embed.copy()
+                        updated_embed.title = "🏆 Payout Confirmed 🏆"
+                        updated_embed.description = f"Congratulations {winner.mention}!\n\nPaid by {user.mention}"
+                        await message.edit(embed=updated_embed)
+                        await message.clear_reaction("⏳")
+                        await message.add_reaction("👍")
+                        break
+                    else:
+                        await message.remove_reaction(reaction, user)
 
     async def draw_winner(self, guild):
         guild_data = self.load_guild_data()
-        print(f"Guild Data Before Draw: ")
-        if str(guild.id) not in guild_data:
-            return None, None, 0
+        print(f"Guild Data Before Draw: {guild_data}")
+        if str(guild.id) not in guild_data or not guild_data[str(guild.id)]:
+            return None, None, 0, 0, 0
 
         ticket_pool = []
         total_donations = 0
+        total_users = len(guild_data[str(guild.id)])
 
         for user_id, user_data in guild_data[str(guild.id)].items():
             ticket_pool.extend([user_id] * user_data['tickets'])
             total_donations += user_data['donation']
 
         if not ticket_pool:
-            return None, None, 0
+            return None, None, 0, 0, 0
 
+        total_tickets = len(ticket_pool)
         winning_ticket = random.choice(ticket_pool)
         winner_id = winning_ticket
         winner_data = guild_data[str(guild.id)][winner_id]
@@ -160,7 +207,8 @@ class Lottery(commands.Cog):
         self.clear_guild_tickets()
         print(f"Guild Data After Draw: {self.load_guild_data()}")
 
-        return winner_id, winner_data, prize_amount
+        return winner_id, winner_data, prize_amount, total_tickets, total_users
+        
 
     def clear_guild_tickets(self):
         print("Clearing guild tickets...")
@@ -185,6 +233,18 @@ class Lottery(commands.Cog):
 
         await self.config.guild(ctx.guild).start_time.set(start_time)
         await ctx.send(f'The lottery start time has been set to {start_time}!')
+
+    @commands.command()
+    @commands.guild_only()
+    async def set_lottery_winner_channel(self, ctx):
+        await self.config.guild(ctx.guild).winner_channel_id.set(ctx.channel.id)
+        await ctx.send(f'This channel has been set for lottery winner announcements!')
+
+    @commands.command()
+    @commands.guild_only()
+    async def set_payout_channel(self, ctx):
+        await self.config.guild(ctx.guild).payout_channel_id.set(ctx.channel.id)
+        await ctx.send(f'This channel has been set for payout messages!')
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -216,7 +276,7 @@ class Lottery(commands.Cog):
                         total_tickets = await self.add_tickets(guild, user, tickets)
 
                         ticket_embed = discord.Embed(
-                            title="Tickets Received",
+                            title="<a:dr_zcash:1075563572924530729> Tickets Received <a:dr_zcash:1075563572924530729>",
                             description=f'{user.mention} received {tickets} tickets! Total tickets: {total_tickets}',
                             color=discord.Color.green()
                         )
@@ -225,7 +285,7 @@ class Lottery(commands.Cog):
 
     async def add_tickets(self, guild, user, tickets):
         guild_data = self.load_guild_data()
-        print(f"Guild Data Before Adding Tickets:")
+        print(f"Guild Data Before Adding Tickets: {guild_data}")
 
         if str(guild.id) not in guild_data:
             guild_data[str(guild.id)] = {}
@@ -281,5 +341,40 @@ class Lottery(commands.Cog):
             await ctx.send("Lottery ended manually.")
         else:
             await ctx.send("You do not have permission to end the lottery.")
+
+    @commands.Cog.listener()
+    async def on_raw_reaction_add(self, payload):
+        payout_channel_ids = [guild_config['payout_channel_id'] for guild_config in await self.config.all_guilds().values()]
+        if payload.channel_id in payout_channel_ids and str(payload.emoji) == "⏳":
+            message_id = payload.message_id
+            if message_id in self.sent_embeds:
+                guild = self.bot.get_guild(payload.guild_id)
+                member = guild.get_member(payload.user_id)
+                if member and discord.utils.get(member.roles, id=PAYMENT_ROLE_ID):
+                    await self.process_payment(message_id, member.id)
+                else:
+                    channel = self.bot.get_channel(payload.channel_id)
+                    message = await channel.fetch_message(message_id)
+                    await message.remove_reaction(payload.emoji, member)
+
+    async def process_payment(self, message_id, payer_id):
+        payout_channel_id = next(guild_config['payout_channel_id'] for guild_config in await self.config.all_guilds().values() if self.sent_embeds.get(message_id))
+        target_channel = self.bot.get_channel(payout_channel_id)
+        if target_channel:
+            embed_info = self.sent_embeds.get(message_id)
+            if embed_info:
+                winner_id = embed_info["winner_id"]
+                prize_amount = embed_info["prize_amount"]
+                payer_user = await self.bot.fetch_user(payer_id)
+                embed_message = await target_channel.fetch_message(message_id)
+                embed = embed_message.embeds[0]
+                embed.title = "🏆 Payout Confirmed 🏆"
+                embed.description = f"Congratulations <@{winner_id}>!\n\nPaid by {payer_user.mention}"
+                await embed_message.edit(embed=embed)
+                await embed_message.clear_reaction("⏳")
+                await embed_message.add_reaction("👍")
+                del self.sent_embeds[message_id]
+
 async def setup(bot):
-    await bot.add_cog(Lottery(bot))
+    cog = Lottery(bot)
+    await bot.add_cog(cog)

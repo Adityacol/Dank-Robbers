@@ -12,7 +12,6 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
-from textblob import TextBlob
 
 logger = logging.getLogger("red.MessageModeration")
 

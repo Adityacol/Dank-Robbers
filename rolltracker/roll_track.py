@@ -86,7 +86,7 @@ class RollTrack(commands.Cog):
 
     def get_prize_and_quantity(self, roll_number):
         if roll_number == 1:
-            return "Universe box", 2
+            return "Universe box", 4
         elif 2 <= roll_number <= 499:
             return "Adventure Ticket", 25
         elif roll_number == 500:
@@ -142,11 +142,11 @@ class RollTrack(commands.Cog):
         elif 6001 <= roll_number <= 6499:
             return "Cell Phone", 69
         elif roll_number == 6500:
-            return "Daily Box", 2
+            return "Daily Box", 10
         elif 6501 <= roll_number <= 6999:
             return "Apple", 15
         elif roll_number == 7000:
-            return "Pepe Coin", 10
+            return "Pepe Coin", 30
         elif 7001 <= roll_number <= 7499:
             return "Worm", 15
         elif roll_number == 7500:
@@ -170,9 +170,9 @@ class RollTrack(commands.Cog):
         elif 9501 <= roll_number <= 9998:
             return "Ant", 50
         elif roll_number == 9999:
-            return "Odd eye", 1
+            return "Odd eye", 4
         elif roll_number == 10000:
-            return "Grand Prize - 5,000,000,000", 1
+            return "Grand Prize - 10,000,000,000", 1
         else:
             return "Unknown prize", 1
 

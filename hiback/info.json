@@ -1,0 +1,21 @@
+{
+    "author": [
+        "Aditya"
+    ],
+    "install_msg": "Thanks for installing my Cog. For any feature requests/ suggestions/ bugs, feel free to shoot me a dm author",
+    "name": "HiBack",
+    "short": "Simple auto dad joke.",
+    "description": " Replies to I'm X with Hi, X",
+    "tags": [
+        "hiback",
+        "hi",
+        "back",
+        "dadjoke",
+        "autoresponse"
+    ],
+    "type": "COG",
+    "hidden": false,
+    "disabled": false,
+    "min_bot_version": "3.5.1",
+    "end_user_data_statement": "This cog does not store any end user data."
+}

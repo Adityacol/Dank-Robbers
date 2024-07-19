@@ -1,0 +1,18 @@
+{
+    "author": [
+        "Aditya"
+    ],
+    "install_msg": "Thanks for installing my Cog! \nThis cog/command is inspired by KableKompany#0001 \n For any feature requests/ suggestions/ bugs, feel free to shoot me a dm ",
+    "name": "WhoAsked",
+    "short": "Who Asked??",
+    "description": "When you just have to ask who the hell asked?",
+    "tags": [
+        "fun",
+        "whoasked"
+    ],
+    "type": "COG",
+    "hidden": false,
+    "disabled": false,
+    "min_bot_version": "3.5.1",
+    "end_user_data_statement": "This cog does not store any end user data."
+}
