@@ -1,0 +1,13 @@
+{
+    "name": "Advanced AI Chatbot",
+    "description": "An advanced AI chatbot cog with mood detection, response generation, and user conversation management.",
+    "author": "Aditya",
+    "version": "1.0.0",
+    "required_cogs": [],
+    "default_config": {
+        "ai_api_key": null,
+        "chat_channel_id": null,
+        "conversations": {}
+    },
+    "shortcuts": []
+}
