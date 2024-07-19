@@ -94,12 +94,25 @@ class AdvancedAIChatBotCog(commands.Cog):
             }
         }
 
-
-
     @commands.command()
-    async def chat(self, ctx, *, message: str):
-        response = await self.process_message(ctx.author.id, message)
-        await ctx.send(response)
+    async def set_channel_ai(self, ctx, channel: discord.TextChannel):
+        """Set the channel for AI interaction."""
+        await self.config.guild(ctx.guild).ai_channel.set(channel.id)
+        await ctx.send(f"AI interaction channel has been set to {channel.mention}.")
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        # Ignore messages from bots or messages not in the set channel
+        if message.author.bot:
+            return
+
+        ai_channel_id = await self.config.guild(message.guild).ai_channel()
+        if message.channel.id != ai_channel_id:
+            return
+
+        # Process the message
+        response = await self.process_message(message.author.id, message.content)
+        await message.channel.send(response)
 
     async def process_message(self, user_id, message):
         # Retrieve or create conversation state for the user
@@ -163,7 +176,7 @@ class AdvancedAIChatBotCog(commands.Cog):
         # Get the mood-based response template
         response_template = self.mood_responses[mood]['template']
 
-        # Generate response from OpenAI
+        # Generate response from Eden AI
         user_messages = [turn['message'] for turn in conversation['context'] if turn['role'] == 'user']
         prompt = '\n'.join(user_messages)
         response = await self.chat_completion(prompt, str(conversation['user_id']), language='en')
@@ -171,9 +184,23 @@ class AdvancedAIChatBotCog(commands.Cog):
         return response
 
     async def chat_completion(self, prompt, user_id, language='en'):
-        # Replace with your AI service's API call
+        # Replace with your Eden AI service's API call
         # Here we simulate a call with a dummy response
-        return "This is a simulated response."
+        # Replace the URL and headers with your actual API details
+        api_url = "https://api.edenai.run/v1/openai/chat/completions"
+        headers = {
+            "Authorization": f"Bearer YOUR_EDEN_AI_API_KEY",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "gpt-3.5-turbo",
+            "messages": [{"role": "user", "content": prompt}],
+            "user_id": user_id,
+            "language": language
+        }
+        async with self.session.post(api_url, headers=headers, json=payload) as resp:
+            result = await resp.json()
+            return result.get("choices", [{}])[0].get("message", "I couldn't generate a response.")
 
     def learn_from_interaction(self, conversation):
         # TODO: Implement learning logic based on user interaction
