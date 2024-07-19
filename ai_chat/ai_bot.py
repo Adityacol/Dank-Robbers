@@ -182,7 +182,7 @@ class AdvancedAIChatBotCog(commands.Cog):
         # Generate response from Eden AI
         user_messages = [turn['message'] for turn in conversation['context'] if turn['role'] == 'user']
         prompt = '\n'.join(user_messages)
-        response = await self.chat_completion(prompt, str(conversation['user_id']), language='en')
+        response = self.chat_completion(prompt, str(conversation['user_id']), language='en')
 
         return response
 
@@ -204,6 +204,7 @@ class AdvancedAIChatBotCog(commands.Cog):
         response = requests.post(api_url, json=payload, headers=headers)
         result = response.json()
 
+        # Extract the generated text from the response
         return result.get('openai', {}).get('generated_text', "I couldn't generate a response.")
 
     def learn_from_interaction(self, conversation):
@@ -216,7 +217,7 @@ class AdvancedAIChatBotCog(commands.Cog):
             "You must be a keyboard warrior with that language!",
             "My developer programmed me to ignore bad words. Better luck next time!",
             "Is that the best insult you can come up with? I'm disappointed!",
-            "Sorry, I don't speak bad word language. Try again with something creative!",
+            "Sorry, I don't speak bad word language. Try again with something creative!", 
             "Oh Really You dumb human you thought you will abuse me you are really dumb Accha bete baap ko sikah raha hai"
         ]
         return random.choice(replies)
