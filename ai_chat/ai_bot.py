@@ -3,6 +3,9 @@ import discord
 import aiohttp
 import random
 
+# Replace 'YOUR_EDEN_API_TOKEN' with your actual Eden AI API token
+EDEN_API_TOKEN = 'YOUR_EDEN_API_TOKEN'
+
 class AdvancedAIChatBotCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -186,10 +189,9 @@ class AdvancedAIChatBotCog(commands.Cog):
     async def chat_completion(self, prompt, user_id, language='en'):
         # Replace with your Eden AI service's API call
         # Here we simulate a call with a dummy response
-        # Replace the URL and headers with your actual API details
         api_url = "https://api.edenai.run/v1/openai/chat/completions"
         headers = {
-            "Authorization": f"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMzk3MmY1NGItNzc5YS00ZTViLWJkYmYtOTE1MGUxNGM1NjBkIiwidHlwZSI6ImFwaV90b2tlbiJ9.bjgAORT4d0l-mNwAfj9LD7vnkqGX5WSKe_DWo6h01is",
+            "Authorization": f"Bearer {EDEN_API_TOKEN}",
             "Content-Type": "application/json"
         }
         payload = {
@@ -199,8 +201,11 @@ class AdvancedAIChatBotCog(commands.Cog):
             "language": language
         }
         async with self.session.post(api_url, headers=headers, json=payload) as resp:
-            result = await resp.json()
-            return result.get("choices", [{}])[0].get("message", "I couldn't generate a response.")
+            if resp.status == 200:
+                result = await resp.json()
+                return result.get("choices", [{}])[0].get("message", "I couldn't generate a response.")
+            else:
+                return f'Error: {resp.status} - {await resp.text()}'
 
     def learn_from_interaction(self, conversation):
         # TODO: Implement learning logic based on user interaction
@@ -212,11 +217,12 @@ class AdvancedAIChatBotCog(commands.Cog):
             "You must be a keyboard warrior with that language!",
             "My developer programmed me to ignore bad words. Better luck next time!",
             "Is that the best insult you can come up with? I'm disappointed!",
-            "Sorry, I don't speak bad word language. Try again with something creative!", 
+            "Sorry, I don't speak bad word language. Try again with something creative!",
             "Oh Really You dumb human you thought you will abuse me you are really dumb "
             "Accha bete baap ko sikah raha hai"
         ]
         return random.choice(replies)
+
 # Setup function for loading the cog
 async def setup(bot):
     await bot.add_cog(AdvancedAIChatBotCog(bot))
