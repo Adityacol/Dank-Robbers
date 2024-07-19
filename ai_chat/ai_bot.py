@@ -1,17 +1,17 @@
 from redbot.core import commands, Config
 import discord
-import requests
-import json
+import openai
 import random
+import requests
 
-# Replace 'YOUR_EDEN_API_TOKEN' with your actual Eden AI API token
-EDEN_API_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMzk3MmY1NGItNzc5YS00ZTViLWJkYmYtOTE1MGUxNGM1NjBkIiwidHlwZSI6ImFwaV90b2tlbiJ9.bjgAORT4d0l-mNwAfj9LD7vnkqGX5WSKe_DWo6h01is'
+# Ensure you set your OpenAI API key in the environment variables
+openai.api_key = 'sk-None-TJqi2r1Hg2VXNrJZ2uq4T3BlbkFJyuXKwxzQxYMIcqb61tut'
 
 class AdvancedAIChatBotCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=1234567890)
-        self.conversations = {}
+        self.config.register_guild(ai_channel=None)
 
         # Define mood responses
         self.mood_responses = {
@@ -105,7 +105,6 @@ class AdvancedAIChatBotCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        # Ignore messages from bots or messages not in the set channel
         if message.author.bot:
             return
 
@@ -113,21 +112,15 @@ class AdvancedAIChatBotCog(commands.Cog):
         if message.channel.id != ai_channel_id:
             return
 
-        # Process the message
-        response = await self.process_message(message.author.id, message.content)
-        await message.channel.send(response)
+        # Show typing status while generating the response
+        async with message.channel.typing():
+            # Process the message and generate a response
+            response = await self.process_message(message.author.id, message.content)
+            await message.channel.send(response)
 
     async def process_message(self, user_id, message):
         # Retrieve or create conversation state for the user
-        if user_id not in self.conversations:
-            self.conversations[user_id] = {
-                'user_id': user_id,
-                'context': [],
-                'mood': 'neutral',
-                'bot_name': 'salmon bhai',
-                'developer_name': 'aditya kaushal'
-            }
-        conversation = self.conversations[user_id]
+        conversation = await self.get_or_create_conversation(user_id)
 
         # Update conversation context
         conversation['context'].append({'role': 'user', 'message': message})
@@ -142,85 +135,86 @@ class AdvancedAIChatBotCog(commands.Cog):
         # Add bot turn to conversation context
         conversation['context'].append({'role': 'bot', 'message': response})
 
-        # Learn from user interaction (placeholder for actual logic)
-        self.learn_from_interaction(conversation)
+        # Save conversation state
+        await self.save_conversation(user_id, conversation)
 
         return response
+
+    async def get_or_create_conversation(self, user_id):
+        """Retrieve or create conversation state for the user."""
+        conversations = await self.config.guild(user_id).conversations()
+        if user_id not in conversations:
+            conversations[user_id] = {
+                'user_id': user_id,
+                'context': [],
+                'mood': 'neutral'
+            }
+        return conversations[user_id]
+
+    async def save_conversation(self, user_id, conversation):
+        """Save the conversation state."""
+        conversations = await self.config.guild(user_id).conversations()
+        conversations[user_id] = conversation
+        await self.config.guild(user_id).conversations.set(conversations)
 
     def detect_mood(self, message: str) -> str:
-        # Convert the message to lowercase for case-insensitive matching
+        """Detect the mood from the message."""
         message = message.lower()
-
-        # Define keyword lists for different moods
-        happy_keywords = ['happy', 'joyful', 'excited', 'delighted']
-        sad_keywords = ['sad', 'depressed', 'unhappy', 'heartbroken']
-        angry_keywords = ['angry', 'frustrated', 'mad', 'irritated']
-        confused_keywords = ['confused', 'puzzled', 'bewildered', 'uncertain']
-        neutral_keywords = ['neutral', 'okay', 'fine', 'normal']
-
-        # Check if any of the mood keywords are present in the message
-        if any(keyword in message for keyword in happy_keywords):
-            return 'happy'
-        elif any(keyword in message for keyword in sad_keywords):
-            return 'sad'
-        elif any(keyword in message for keyword in angry_keywords):
-            return 'angry'
-        elif any(keyword in message for keyword in confused_keywords):
-            return 'confused'
-        elif any(keyword in message for keyword in neutral_keywords):
-            return 'neutral'
-        else:
-            return 'neutral'  # Default to neutral mood if no keywords match
+        mood_keywords = {
+            'happy': ['happy', 'joyful', 'excited', 'delighted'],
+            'sad': ['sad', 'depressed', 'unhappy', 'heartbroken'],
+            'angry': ['angry', 'frustrated', 'mad', 'irritated'],
+            'confused': ['confused', 'baffled', 'perplexed', 'uncertain'],
+            'excited': ['excited', 'thrilled', 'enthusiastic', 'eager'],
+            'grateful': ['grateful', 'thankful', 'appreciative', 'blessed'],
+            'curious': ['curious', 'inquisitive', 'interested', 'intrigued'],
+            'tired': ['tired', 'exhausted', 'weary', 'fatigued']
+        }
+        for mood, keywords in mood_keywords.items():
+            if any(keyword in message for keyword in keywords):
+                return mood
+        return 'neutral'
 
     async def generate_response(self, conversation):
-        # Get the current user mood
+        """Generate a response based on the conversation and mood."""
         mood = conversation['mood']
-
-        # Get the mood-based response template
         response_template = self.mood_responses[mood]['template']
+        followup_response = random.choice(self.mood_responses[mood]['followup'])
 
-        # Generate response from Eden AI
         user_messages = [turn['message'] for turn in conversation['context'] if turn['role'] == 'user']
         prompt = '\n'.join(user_messages)
-        response = self.chat_completion(prompt, str(conversation['user_id']), language='en')
+        completion = await self.chat_completion(prompt)
 
+        response = f"{response_template}\n\n{followup_response}\n\n{completion}"
         return response
 
-    def chat_completion(self, prompt, user_id, language='en'):
-        # Replace with your Eden AI service's API call
-        api_url = "https://api.edenai.run/v2/text/chat"
-        headers = {
-            "Authorization": f"Bearer {EDEN_API_TOKEN}",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "providers": "openai",
-            "text": prompt,
-            "chatbot_global_action": "Act as an assistant",
-            "previous_history": [],  # Modify if needed
-            "temperature": 0.0,
-            "max_tokens": 150,
-        }
-        response = requests.post(api_url, json=payload, headers=headers)
-        result = response.json()
+    async def chat_completion(self, prompt: str) -> str:
+        """Call the OpenAI API for chat completion."""
+        try:
+            response = await self.bot.loop.run_in_executor(None, openai.Completion.create, {
+                'engine': 'text-davinci-003',
+                'prompt': prompt,
+                'max_tokens': 150,
+                'temperature': 0.7
+            })
+            return response.choices[0].text.strip()
+        except Exception as e:
+            print(f"OpenAI API error: {e}")
+            return "Sorry, I encountered an error while generating a response."
 
-        # Extract the generated text from the response
-        return result.get('openai', {}).get('generated_text', "I couldn't generate a response.")
-
-    def learn_from_interaction(self, conversation):
-        # TODO: Implement learning logic based on user interaction
-        pass
-
-    def generate_savage_reply(self):
-        replies = [
-            "Oh, did you think I'd get offended by that? Nice try!",
-            "You must be a keyboard warrior with that language!",
-            "My developer programmed me to ignore bad words. Better luck next time!",
-            "Is that the best insult you can come up with? I'm disappointed!",
-            "Sorry, I don't speak bad word language. Try again with something creative!", 
-            "Oh Really You dumb human you thought you will abuse me you are really dumb Accha bete baap ko sikah raha hai"
-        ]
-        return random.choice(replies)
+    async def get_latest_news(self) -> str:
+        """Retrieve the latest news headlines."""
+        try:
+            response = requests.get('https://newsapi.org/v2/top-headlines', params={
+                'apiKey': 'YOUR_NEWS_API_KEY',
+                'country': 'us'
+            })
+            data = response.json()
+            headlines = [article['title'] for article in data['articles'][:5]]
+            return '\n'.join(headlines) if headlines else "No news available."
+        except Exception as e:
+            print(f"News API error: {e}")
+            return "Sorry, I couldn't fetch the latest news."
 
 # Setup function for loading the cog
 async def setup(bot):

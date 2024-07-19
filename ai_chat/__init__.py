@@ -1,4 +1,6 @@
+# __init__.py
+
 from .ai_bot import AdvancedAIChatBotCog
 
-async def setup(bot):
-    await bot.add_cog(AdvancedAIChatBotCog(bot))
+def setup(bot):
+    bot.add_cog(AdvancedAIChatBotCog(bot))

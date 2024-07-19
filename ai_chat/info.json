@@ -1,13 +1,12 @@
 {
-    "name": "Advanced AI Chatbot",
-    "description": "An advanced AI chatbot cog with mood detection, response generation, and user conversation management.",
-    "author": "Aditya",
+    "name": "AdvancedAIChatBot",
+    "description": "An advanced AI chatbot that interacts with users based on their mood and generates responses using OpenAI.",
+    "author": "YourName",
     "version": "1.0.0",
     "required_cogs": [],
-    "default_config": {
-        "ai_api_key": null,
-        "chat_channel_id": null,
-        "conversations": {}
-    },
-    "shortcuts": []
+    "dependencies": [
+        "requests",
+        "discord.py",
+        "openai"
+    ]
 }
