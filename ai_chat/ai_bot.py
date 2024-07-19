@@ -94,9 +94,7 @@ class AdvancedAIChatBotCog(commands.Cog):
             }
         }
 
-    @commands.command()
-    async def ping(self, ctx):
-        await ctx.send("Pong!")
+
 
     @commands.command()
     async def chat(self, ctx, *, message: str):
