@@ -157,15 +157,15 @@ class RollTrack(commands.Cog):
             return "Pepe Trophy", 1
         elif 8001 <= roll_number <= 8499:
             return "Dmc", 3333333
-        elif 8500:
+        elif roll_number == 8500:
             return "Pet Food", 3
         elif 8501 <= roll_number <= 8999:
             return "Adventure Ticket", 25
-        elif 9000:
+        elif roll_number == 9000:
             return "Fool's Notif", 1
         elif 9001 <= roll_number <= 9499:
             return "Cookie", 60
-        elif 9500:
+        elif roll_number == 9500:
             return "Credit card", 1
         elif 9501 <= roll_number <= 9998:
             return "Ant", 50
@@ -173,6 +173,46 @@ class RollTrack(commands.Cog):
             return "Odd eye", 4
         elif roll_number == 10000:
             return "Grand Prize - 10,000,000,000", 1
+        elif 10001 <= roll_number <= 10499:
+            return "Worm", 30
+        elif roll_number == 10500:
+            return "New Year Popper", 15
+        elif 10501 <= roll_number <= 10999:
+            return "Pepe Coin", 50
+        elif roll_number == 11000:
+            return "Metal Pipe", 10
+        elif 11001 <= roll_number <= 11499:
+            return "Cell Phone", 100
+        elif roll_number == 11500:
+            return "Dmc", 33333333
+        elif 11501 <= roll_number <= 11999:
+            return "Adventure Ticket", 30
+        elif roll_number == 12000:
+            return "Daily Box", 10
+        elif 12001 <= roll_number <= 12499:
+            return "Cookie", 70
+        elif roll_number == 12500:
+            return "Pepe Trophy", 2
+        elif 12501 <= roll_number <= 12999:
+            return "Ant", 100
+        elif roll_number == 13000:
+            return "Grand Prize - 50,000,000,000", 1
+        elif 13001 <= roll_number <= 13499:
+            return "Vote Pack", 10
+        elif roll_number == 13500:
+            return "Fool's Notif", 2
+        elif 13501 <= roll_number <= 13999:
+            return "Worm", 35
+        elif roll_number == 14000:
+            return "Pepe Coin", 60
+        elif 14001 <= roll_number <= 14499:
+            return "Cookie", 80
+        elif roll_number == 14500:
+            return "Metal Pipe", 15
+        elif 14501 <= roll_number <= 14999:
+            return "Ant", 100
+        elif roll_number == 15000:
+            return "Dmc", 100000000
         else:
             return "Unknown prize", 1
 
