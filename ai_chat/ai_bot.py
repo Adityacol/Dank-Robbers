@@ -4,7 +4,7 @@ import aiohttp
 import random
 
 # Replace 'YOUR_EDEN_API_TOKEN' with your actual Eden AI API token
-EDEN_API_TOKEN = 'YOUR_EDEN_API_TOKEN'
+EDEN_API_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMzk3MmY1NGItNzc5YS00ZTViLWJkYmYtOTE1MGUxNGM1NjBkIiwidHlwZSI6ImFwaV90b2tlbiJ9.bjgAORT4d0l-mNwAfj9LD7vnkqGX5WSKe_DWo6h01is'
 
 class AdvancedAIChatBotCog(commands.Cog):
     def __init__(self, bot):
