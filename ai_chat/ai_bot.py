@@ -3,7 +3,7 @@ from redbot.core import commands, Config
 import aiohttp
 import random
 
-class AdvancedAIChatBotCog(commands.Cog):
+class AiChat(commands.Cog):
     """Advanced AI Chatbot Cog with mood detection and state management."""
 
     def __init__(self, bot):
@@ -135,4 +135,4 @@ class AdvancedAIChatBotCog(commands.Cog):
 
 # Setup function for loading the cog
 async def setup(bot):
-    await bot.add_cog(AdvancedAIChatBotCog(bot))
+    await bot.add_cog(AiChat(bot))
