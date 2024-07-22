@@ -166,8 +166,12 @@ class Auction(commands.Cog):
         embed.set_thumbnail(url=self.bot.user.display_avatar.url)
         embed.add_field(name="How it works", value="1. Click the button below.\n2. Fill out the modal with donation details.\n3. Await further instructions in your private channel.", inline=False)
         embed.set_footer(text="Thank you for contributing to our community!")
-        await ctx.send(embed=embed, view=view)
-        logging.info("Auction request initiated.")
+        try:
+            await ctx.send(embed=embed, view=view)
+            logging.info("Auction request initiated.")
+        except Exception as e:
+            logging.error(f"An error occurred while sending the auction request message: {e}")
+            await ctx.send(f"An error occurred while initiating the auction request: {str(e)}")
 
     @commands.Cog.listener()
     async def on_message_edit(self, before, after):
@@ -196,15 +200,14 @@ class Auction(commands.Cog):
                         
                         user = await self.bot.fetch_user(auction["user_id"])
                         await after.channel.send(f"Item: {item_dank}, Amount: {amount_dank}")
-                        await user.send("Thank you for your donation! Your auction will start shortly.")
-                        ticket_channel = after.guild.get_channel(auction["ticket_channel_id"])
                         
+                        ticket_channel = after.guild.get_channel(auction["ticket_channel_id"])
                         if ticket_channel:
                             await ticket_channel.delete()
-                        
+
                         await self.start_auction_announcement(after.guild, auction, auction["user_id"], auction["item"], auction["amount"])
                         return
-                
+
                 await after.channel.send("The donated item or amount does not match the saved auction details.")
                 logging.info("Mismatch in donated item or amount.")
                 
@@ -221,8 +224,11 @@ class Auction(commands.Cog):
         )
         embed.set_thumbnail(url=self.bot.user.display_avatar.url)
         embed.set_footer(text="Good luck to all bidders!")
-        await auction_channel.send(embed=embed)
-        await self.run_auction(auction)
+        try:
+            await auction_channel.send(embed=embed)
+            await self.run_auction(auction)
+        except Exception as e:
+            logging.error(f"An error occurred while sending the auction announcement: {e}")
 
     async def run_auction(self, auction):
         """Run the auction timer."""
@@ -254,7 +260,10 @@ class Auction(commands.Cog):
             )
             embed.set_thumbnail(url=self.bot.user.display_avatar.url)
             embed.set_footer(text="Congratulations to the winner!")
-            await auction_channel.send(embed=embed)
+            try:
+                await auction_channel.send(embed=embed)
+            except Exception as e:
+                logging.error(f"An error occurred while sending the auction end announcement: {e}")
         else:
             embed = discord.Embed(
                 title="🛑 Auction Ended! 🛑",
@@ -263,7 +272,10 @@ class Auction(commands.Cog):
             )
             embed.set_thumbnail(url=self.bot.user.display_avatar.url)
             embed.set_footer(text="Thank you for participating!")
-            await auction_channel.send(embed=embed)
+            try:
+                await auction_channel.send(embed=embed)
+            except Exception as e:
+                logging.error(f"An error occurred while sending the auction end announcement: {e}")
 
     @commands.command()
     async def bid(self, ctx: commands.Context, auction_id: int, bid_amount: int):
