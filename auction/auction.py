@@ -136,7 +136,12 @@ class Auction(commands.Cog):
     async def requestauction(self, ctx: commands.Context):
         """Request a new auction."""
         view = self.AuctionView(self)
-        await ctx.send("Click the button below to request an auction.", view=view)
+        embed = discord.Embed(
+            title="Request an Auction",
+            description="Click the button below to request an auction.",
+            color=discord.Color.blue()
+        )
+        await ctx.send(embed=embed, view=view)
         logging.info("Auction request initiated.")
 
     @commands.Cog.listener()
