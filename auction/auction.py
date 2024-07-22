@@ -122,6 +122,23 @@ class Auction(commands.Cog):
             async with self.cog.config.auctions() as auctions:
                 auctions[auction_id] = auction_data
 
+    class AuctionView(discord.ui.View):
+        def __init__(self, cog):
+            super().__init__(timeout=None)
+            self.cog = cog
+
+        @discord.ui.button(label="Request Auction", style=discord.ButtonStyle.green)
+        async def request_auction_button(self, button: discord.ui.Button, interaction: discord.Interaction):
+            modal = self.cog.AuctionModal(self.cog)
+            await interaction.response.send_modal(modal)
+
+    @commands.command()
+    async def requestauction(self, ctx: commands.Context):
+        """Request a new auction."""
+        view = self.AuctionView(self)
+        await ctx.send("Click the button below to request an auction.", view=view)
+        logging.info("Auction request initiated.")
+
     @commands.Cog.listener()
     async def on_message_edit(self, before, after):
         try:
@@ -182,20 +199,17 @@ class Auction(commands.Cog):
         highest_bid = max(
             bids.get(auction["auction_id"], {}).values(),
             key=lambda x: x.get("amount", 0),
-            default=None
+            default=None,
         )
 
         if highest_bid:
-            highest_bidder_id = highest_bid["user_id"]
-            highest_bid_amount = highest_bid["amount"]
-            if highest_bidder_id is not None and highest_bid_amount is not None:
-                winner = await self.bot.fetch_user(highest_bidder_id)
-                embed = discord.Embed(
-                    title="Auction Ended!",
-                    description=f"Item: {auction['item']}\nAmount: {auction['amount']}\nWinning Bid: {highest_bid_amount}\nWinner: {winner.mention}\nAuction ID: {auction['auction_id']}\nDonated by {await self.bot.fetch_user(auction['user_id']).mention}",
-                    color=discord.Color.green()
-                )
-                await auction_channel.send(embed=embed)
+            user = await self.bot.fetch_user(highest_bid["user_id"])
+            embed = discord.Embed(
+                title="Auction Ended!",
+                description=f"Item: {auction['item']}\nAmount: {auction['amount']}\nWinner: {user.mention}\nWinning Bid: {highest_bid['amount']}\nAuction ID: {auction['auction_id']}\nDonated by {await self.bot.fetch_user(auction['user_id']).mention}",
+                color=discord.Color.green()
+            )
+            await auction_channel.send(embed=embed)
         else:
             embed = discord.Embed(
                 title="Auction Ended!",
@@ -203,12 +217,6 @@ class Auction(commands.Cog):
                 color=discord.Color.red()
             )
             await auction_channel.send(embed=embed)
-
-    @commands.slash_command()
-    async def requestauction(self, ctx: commands.Context):
-        """Request a new auction."""
-        await ctx.send_modal(self.AuctionModal(self))
-        logging.info("Auction request initiated.")
 
     @commands.command()
     async def bid(self, ctx: commands.Context, auction_id: int, bid_amount: int):
