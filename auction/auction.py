@@ -49,78 +49,80 @@ class Auction(commands.Cog):
         auctions = self.bot.loop.run_until_complete(self.config.auctions())
         return str(max(map(int, auctions.keys()), default=0) + 1)
 
-    class AuctionModal(discord.ui.Modal):
-        def __init__(self, cog):
-            self.cog = cog
-            super().__init__(title="Request An Auction")
+class AuctionModal(discord.ui.Modal):
+    def __init__(self, cog):
+        self.cog = cog
+        super().__init__(title="Request An Auction")
 
-        item_name = discord.ui.TextInput(
-            label="Item to Donate",
-            placeholder="e.g., Blob",
-            required=True,
-            min_length=1,
-            max_length=100,
-            style=discord.TextStyle.short
-        )
-        item_count = discord.ui.TextInput(
-            label="Quantity",
-            placeholder="e.g., 5",
-            required=True,
-            max_length=10
-        )
-        minimum_bid = discord.ui.TextInput(
-            label="Minimum Bid",
-            placeholder="e.g., 1,000,000",
-            required=False,
-            style=discord.TextStyle.short
-        )
-        message = discord.ui.TextInput(
-            label="Message",
-            placeholder="e.g., I love DR!",
-            required=False,
-            max_length=200,
-            style=discord.TextStyle.short
-        )
+    item_name = discord.ui.TextInput(
+        label="What are you going to donate?",
+        placeholder="e.g., Blob",
+        required=True,
+        min_length=1,
+        max_length=100,
+        style=discord.TextStyle.short
+    )
+    item_count = discord.ui.TextInput(
+        label="How many of those items will you donate?",
+        placeholder="e.g., 5",
+        required=True,
+        max_length=10
+    )
+    minimum_bid = discord.ui.TextInput(
+        label="What should the minimum bid be?",
+        placeholder="e.g., 1,000,000",
+        required=False,
+        style=discord.TextStyle.short
+    )
+    message = discord.ui.TextInput(
+        label="What is your message?",
+        placeholder="e.g., I love DR!",
+        required=False,
+        max_length=200,
+        style=discord.TextStyle.short
+    )
 
-        async def on_submit(self, interaction: discord.Interaction):
-            item_name = self.item_name.value
-            item_count = self.item_count.value
+    async def on_submit(self, interaction: discord.Interaction):
+        logging.info("Modal submitted.")
+        item_name = self.item_name.value
+        item_count = self.item_count.value
 
-            if not item_count.isdigit():
-                await interaction.response.send_message("Item count must be a number.", ephemeral=True)
-                return
+        if not item_count.isdigit():
+            await interaction.response.send_message("Item count must be a number.", ephemeral=True)
+            return
 
-            item_count = int(item_count)
+        item_count = int(item_count)
 
-            valid = await self.cog.api_check(interaction, item_count, item_name)
-            if not valid:
-                return
+        valid = await self.cog.api_check(interaction, item_count, item_name)
+        if not valid:
+            return
 
-            guild = interaction.guild
-            overwrites = {
-                guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-                self.cog.bot.user: discord.PermissionOverwrite(read_messages=True),
-            }
-            ticket_channel = await guild.create_text_channel(f"ticket-{interaction.user.name}", overwrites=overwrites)
-            await ticket_channel.send(f"{interaction.user.mention}, please donate {item_count} of {item_name} as mentioned in the modal or you may be blacklisted.")
-            await interaction.response.send_message("Auction details submitted! Please donate the items within 30 minutes.", ephemeral=True)
+        guild = interaction.guild
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            self.cog.bot.user: discord.PermissionOverwrite(read_messages=True),
+        }
+        ticket_channel = await guild.create_text_channel(f"ticket-{interaction.user.name}", overwrites=overwrites)
+        await ticket_channel.send(f"{interaction.user.mention}, please donate {item_count} of {item_name} as you have mentioned in the modal or you will get blacklisted.")
+        await interaction.response.send_message("Auction details submitted! Please donate the items within 30 minutes.", ephemeral=True)
 
-            auction_id = self.cog.get_next_auction_id()
+        auction_id = self.cog.get_next_auction_id()
 
-            auction_data = {
-                "auction_id": auction_id,
-                "user_id": interaction.user.id,
-                "item": item_name,
-                "amount": item_count,
-                "min_bid": self.minimum_bid.value or "1,000,000",
-                "message": self.message.value,
-                "status": "pending",
-                "ticket_channel_id": ticket_channel.id
-            }
+        auction_data = {
+            "auction_id": auction_id,
+            "user_id": interaction.user.id,
+            "item": item_name,
+            "amount": item_count,
+            "min_bid": self.minimum_bid.value or "1,000,000",
+            "message": self.message.value,
+            "status": "pending",
+            "ticket_channel_id": ticket_channel.id
+        }
 
-            async with self.cog.config.auctions() as auctions:
-                auctions[auction_id] = auction_data
+        async with self.cog.config.auctions() as auctions:
+            auctions[auction_id] = auction_data
+
 
     class AuctionView(discord.ui.View):
         def __init__(self, cog):
