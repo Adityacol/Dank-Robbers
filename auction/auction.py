@@ -51,7 +51,7 @@ class Auction(commands.Cog):
         def __init__(self, cog):
             self.cog = cog
             super().__init__(title="Request An Auction")
-
+        
         item_name = discord.ui.TextInput(
             label="What are you going to donate?",
             placeholder="e.g., Blob",
@@ -128,25 +128,21 @@ class Auction(commands.Cog):
 
         @discord.ui.button(label="Request Auction", style=discord.ButtonStyle.green)
         async def request_auction_button(self, button: discord.ui.Button, interaction: discord.Interaction):
-            logging.info("Request Auction button clicked.")
             modal = self.cog.AuctionModal(self.cog)
-            try:
-                await interaction.response.send_modal(modal)
-                logging.info("Modal sent successfully.")
-            except Exception as e:
-                logging.error(f"Failed to send modal: {e}")
-                await interaction.response.send_message("There was an error while sending the modal. Please try again later.", ephemeral=True)
+            await interaction.response.send_modal(modal)
 
     @commands.command()
     async def requestauction(self, ctx: commands.Context):
         """Request a new auction."""
         view = self.AuctionView(self)
         embed = discord.Embed(
-            title="Request an Auction",
-            description="Click the button below to request an auction.",
+            title="🎉 Request an Auction 🎉",
+            description="Click the button below to request an auction and submit your donation details.",
             color=discord.Color.blue()
         )
         embed.set_thumbnail(url=self.bot.user.display_avatar.url)
+        embed.add_field(name="How it works", value="1. Click the button below.\n2. Fill out the modal with donation details.\n3. Await further instructions in your private channel.", inline=False)
+        embed.set_footer(text="Thank you for contributing to our community!")
         await ctx.send(embed=embed, view=view)
         logging.info("Auction request initiated.")
 
@@ -168,7 +164,7 @@ class Auction(commands.Cog):
                         auction["end_time"] = int(time.time()) + 30 * 60
                         await self.config.auctions.set_raw(auction_id, value=auction)
                         user = await self.bot.fetch_user(auction["user_id"])
-                        await after.channel.send(f"item_dank = {item_dank}, amount_dank= {amount_dank}")
+                        await after.channel.send(f"Item: {item_dank}, Amount: {amount_dank}")
                         await user.send("Thank you for your donation! Your auction will start shortly.")
                         ticket_channel = after.guild.get_channel(auction["ticket_channel_id"])
                         if ticket_channel:
@@ -187,10 +183,12 @@ class Auction(commands.Cog):
             auction_channel = await guild.create_text_channel("auction-channel")
         user = await self.bot.fetch_user(user_id)
         embed = discord.Embed(
-            title="Auction Started!",
-            description=f"Item: {item}\nAmount: {amount}\nStarting Bid: {auction['min_bid']}\nDonated by {user.mention}\nAuction ID: {auction['auction_id']}\nMessage: {auction['message']}",
-            color=discord.Color.blue()
+            title="🎉 Auction Started! 🎉",
+            description=f"**Item:** {item}\n**Amount:** {amount}\n**Starting Bid:** {auction['min_bid']}\n**Donated by:** {user.mention}\n**Auction ID:** {auction['auction_id']}\n**Message:** {auction['message']}",
+            color=discord.Color.green()
         )
+        embed.set_thumbnail(url=self.bot.user.display_avatar.url)
+        embed.set_footer(text="Good luck to all bidders!")
         await auction_channel.send(embed=embed)
         await asyncio.create_task(self.run_auction(auction))
 
@@ -205,7 +203,6 @@ class Auction(commands.Cog):
         auction["status"] = "ended"
         async with self.config.auctions() as auctions:
             auctions[auction["auction_id"]] = auction
-
         bids = await self.config.bids()
         highest_bid = max(
             bids.get(auction["auction_id"], {}).values(),
@@ -214,13 +211,77 @@ class Auction(commands.Cog):
         )
 
         if highest_bid:
-            highest_bidder = self.bot.get_user(highest_bid["user_id"])
-            if highest_bidder:
-                await auction_channel.send(f"Congratulations {highest_bidder.mention}! You won the auction for {auction['item']} with a bid of {highest_bid['amount']}!")
-            else:
-                await auction_channel.send(f"No bids for {auction['item']} were placed.")
+            user = await self.bot.fetch_user(highest_bid["user_id"])
+            embed = discord.Embed(
+                title="🏆 Auction Ended! 🏆",
+                description=f"**Item:** {auction['item']}\n**Amount:** {auction['amount']}\n**Winner:** {user.mention}\n**Winning Bid:** {highest_bid['amount']}\n**Auction ID:** {auction['auction_id']}\n**Donated by:** {await self.bot.fetch_user(auction['user_id']).mention}",
+                color=discord.Color.green()
+            )
+            embed.set_thumbnail(url=self.bot.user.display_avatar.url)
+            embed.set_footer(text="Congratulations to the winner!")
+            await auction_channel.send(embed=embed)
         else:
-            await auction_channel.send(f"No bids were placed for the auction of {auction['item']}.")
+            embed = discord.Embed(
+                title="🛑 Auction Ended! 🛑",
+                description=f"**Item:** {auction['item']}\n**Amount:** {auction['amount']}\n**No valid bids received.**\n**Auction ID:** {auction['auction_id']}\n**Donated by:** {await self.bot.fetch_user(auction['user_id']).mention}",
+                color=discord.Color.red()
+            )
+            embed.set_thumbnail(url=self.bot.user.display_avatar.url)
+            embed.set_footer(text="Thank you for participating!")
+            await auction_channel.send(embed=embed)
 
-async def setup(bot):
-    await bot.add_cog(Auction(bot))
+    @commands.command()
+    async def bid(self, ctx: commands.Context, auction_id: int, bid_amount: int):
+        """Place a bid on an auction."""
+        auctions = await self.config.auctions()
+        auction = auctions.get(str(auction_id))
+
+        if not auction:
+            await ctx.send("Invalid auction ID.")
+            return
+
+        if auction["status"] != "active":
+            await ctx.send("Auction is not active.")
+            return
+
+        if bid_amount <= int(auction["min_bid"].replace(",", "")):
+            await ctx.send("Bid amount is less than the minimum bid.")
+            return
+
+        async with self.config.bids() as bids:
+            if str(auction_id) not in bids:
+                bids[str(auction_id)] = {}
+
+            bids[str(auction_id)][str(ctx.author.id)] = {
+                "user_id": ctx.author.id,
+                "amount": bid_amount
+            }
+
+        await ctx.send(f"Your bid of {bid_amount} has been placed for auction ID {auction_id}.")
+        logging.info(f"Bid placed: {ctx.author} bid {bid_amount} on auction {auction_id}.")
+
+    @commands.command()
+    async def cancelauction(self, ctx: commands.Context, auction_id: int):
+        """Cancel an auction."""
+        auctions = await self.config.auctions()
+        auction = auctions.get(str(auction_id))
+
+        if not auction:
+            await ctx.send("Invalid auction ID.")
+            return
+
+        if auction["status"] != "pending":
+            await ctx.send("Only pending auctions can be cancelled.")
+            return
+
+        async with self.config.auctions() as auctions:
+            del auctions[str(auction_id)]
+
+        await ctx.send(f"Auction ID {auction_id} has been cancelled.")
+        logging.info(f"Auction {auction_id} cancelled by {ctx.author}.")
+
+def setup(bot: Red):
+    bot.add_cog(Auction(bot))
+
+
+       
