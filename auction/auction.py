@@ -142,7 +142,7 @@ class Auction(commands.Cog):
             color=discord.Color.blue()
         )
         embed.set_footer(text="Ensure that all details are correct before submitting.")
-        embed.set_thumbnail(url=self.bot.user.avatar_url)
+        embed.set_thumbnail(url=self.bot.user.avatar.url)
         await ctx.send(embed=embed, view=view)
         logging.info("Auction request initiated.")
 
