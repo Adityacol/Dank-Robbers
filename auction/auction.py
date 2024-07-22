@@ -139,20 +139,21 @@ class Auction(commands.Cog):
                 logging.error(f"An error occurred in modal submission: {e}")
                 await interaction.response.send_message(f"An error occurred while processing your submission: {str(e)}", ephemeral=True)
 
-    class AuctionView(View):
-        def __init__(self, cog):
-            super().__init__(timeout=None)
-            self.cog = cog
+class AuctionView(View):
+    def __init__(self, cog):
+        super().__init__(timeout=None)
+        self.cog = cog
 
-        @discord.ui.button(label="Request Auction", style=discord.ButtonStyle.green)
-        async def request_auction_button(self, button: discord.ui.Button, interaction: discord.Interaction):
-            """Open the auction request modal."""
-            try:
-                modal = self.cog.AuctionModal(self.cog)
-                await interaction.response.send_modal(modal)
-            except Exception as e:
-                logging.error(f"An error occurred while sending the modal: {e}")
-                await interaction.response.send_message(f"An error occurred while sending the modal: {str(e)}", ephemeral=True)
+    @discord.ui.button(label="Request Auction", style=discord.ButtonStyle.green)
+    async def request_auction_button(self, button: discord.ui.Button, interaction: discord.Interaction):
+        """Open the auction request modal."""
+        try:
+            modal = self.cog.AuctionModal(self.cog)
+            await interaction.response.send_modal(modal)
+        except Exception as e:
+            logging.error(f"An error occurred while sending the modal: {e}")
+            await interaction.response.send_message(f"An error occurred while sending the modal: {str(e)}", ephemeral=True)
+
 
     @commands.command()
     async def requestauction(self, ctx: commands.Context):
@@ -234,7 +235,7 @@ class Auction(commands.Cog):
         """Run the auction timer."""
         await asyncio.sleep(30 * 60)  # 30 minutes auction duration
         current_time = int(time.time())
-        if current_time >= auction["end_time"]:
+        if current_time >= auction.get("end_time", 0):
             await self.end_auction(auction)
 
     async def end_auction(self, auction):
