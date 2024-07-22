@@ -204,7 +204,7 @@ class Auction(commands.Cog):
             )
             await auction_channel.send(embed=embed)
 
-    @commands.command()
+    @commands.slash_command()
     async def requestauction(self, ctx: commands.Context):
         """Request a new auction."""
         await ctx.send_modal(self.AuctionModal(self))
