@@ -26,6 +26,7 @@ class Auction(commands.Cog):
                 async with session.get("https://api.gwapes.com/items") as response:
                     if response.status != 200:
                         await interaction.response.send_message("Error fetching item value from API. Please try again later.", ephemeral=True)
+                        logging.error(f"API response status: {response.status}")
                         return False
                     data = await response.json()
                     items = data.get("body", [])
@@ -40,6 +41,7 @@ class Auction(commands.Cog):
                         return False
             except Exception as e:
                 await interaction.response.send_message(f"An error occurred while fetching item value: {str(e)}", ephemeral=True)
+                logging.error(f"Exception in API check: {e}")
                 return False
         return True
 
