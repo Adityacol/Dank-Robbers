@@ -22,13 +22,13 @@ class Auction(commands.Cog):
     async def on_ready(self):
         logging.info(f'Logged in as {self.bot.user}')
 
-    async def api_check(self, interaction, item_count, item_name) -> bool:
+    async def api_check(self, user: discord.User, item_count: int, item_name: str) -> bool:
         """Check if the donated item meets the value requirements."""
         async with aiohttp.ClientSession() as session:
             try:
                 async with session.get("https://api.gwapes.com/items") as response:
                     if response.status != 200:
-                        await interaction.response.send_message("Error fetching item value from API. Please try again later.", ephemeral=True)
+                        await user.send("Error fetching item value from API. Please try again later.")
                         logging.error(f"API response status: {response.status}")
                         return False
                     
@@ -37,18 +37,18 @@ class Auction(commands.Cog):
                     item_data = next((item for item in items if item["name"].strip().lower() == item_name.strip().lower()), None)
                     
                     if not item_data:
-                        await interaction.response.send_message("Item not found. Please enter a valid item name.", ephemeral=True)
+                        await user.send("Item not found. Please enter a valid item name.")
                         return False
                     
                     item_value = item_data.get("value", 0)
                     total_value = item_value * item_count
                     
                     if total_value < 100000000:  # Changed to 100 million
-                        await interaction.response.send_message("The total donation value must be over 100 million.", ephemeral=True)
+                        await user.send("The total donation value must be over 100 million.")
                         return False
 
             except Exception as e:
-                await interaction.response.send_message(f"An error occurred while fetching item value: {str(e)}", ephemeral=True)
+                await user.send(f"An error occurred while fetching item value: {str(e)}")
                 logging.error(f"Exception in API check: {e}")
                 return False
         return True
@@ -58,39 +58,39 @@ class Auction(commands.Cog):
         auctions = self.bot.loop.run_until_complete(self.config.auctions())
         return str(max(map(int, auctions.keys()), default=0) + 1)
 
-    async def open_auction_modal(self, interaction: discord.Interaction):
+    async def open_auction_modal(self, ctx: commands.Context):
         """Open the auction request modal."""
-        item_name = await self.prompt_for_input(interaction, "What are you going to donate?")
-        item_count = await self.prompt_for_input(interaction, "How many of those items will you donate?")
-        minimum_bid = await self.prompt_for_input(interaction, "What should the minimum bid be?", optional=True)
-        message = await self.prompt_for_input(interaction, "What is your message?", optional=True)
+        item_name = await self.prompt_for_input(ctx, "What are you going to donate?")
+        item_count = await self.prompt_for_input(ctx, "How many of those items will you donate?")
+        minimum_bid = await self.prompt_for_input(ctx, "What should the minimum bid be?", optional=True)
+        message = await self.prompt_for_input(ctx, "What is your message?", optional=True)
 
         if not item_count.isdigit():
-            await interaction.response.send_message("Item count must be a number.", ephemeral=True)
+            await ctx.send("Item count must be a number.")
             return
 
         item_count = int(item_count)
-        valid = await self.api_check(interaction, item_count, item_name)
+        valid = await self.api_check(ctx.author, item_count, item_name)
         
         if not valid:
             return
 
-        guild = interaction.guild
+        guild = ctx.guild
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            ctx.author: discord.PermissionOverwrite(read_messages=True, send_messages=True),
             self.bot.user: discord.PermissionOverwrite(read_messages=True),
         }
         
-        ticket_channel = await guild.create_text_channel(f"ticket-{interaction.user.name}", overwrites=overwrites)
-        await ticket_channel.send(f"{interaction.user.mention}, please donate {item_count} of {item_name} as you have mentioned in the modal or you will get blacklisted.")
-        await interaction.response.send_message("Auction details submitted! Please donate the items within 30 minutes.", ephemeral=True)
+        ticket_channel = await guild.create_text_channel(f"ticket-{ctx.author.name}", overwrites=overwrites)
+        await ticket_channel.send(f"{ctx.author.mention}, please donate {item_count} of {item_name} as you have mentioned in the modal or you will get blacklisted.")
+        await ctx.send("Auction details submitted! Please donate the items within 30 minutes.")
 
         auction_id = self.get_next_auction_id()
 
         auction_data = {
             "auction_id": auction_id,
-            "user_id": interaction.user.id,
+            "user_id": ctx.author.id,
             "item": item_name,
             "amount": item_count,
             "min_bid": minimum_bid or "1,000,000",
@@ -102,17 +102,17 @@ class Auction(commands.Cog):
         async with self.config.auctions() as auctions:
             auctions[auction_id] = auction_data
 
-    async def prompt_for_input(self, interaction: discord.Interaction, question: str, optional: bool = False) -> str:
+    async def prompt_for_input(self, ctx: commands.Context, question: str, optional: bool = False) -> str:
         """Prompt the user for input."""
-        await interaction.response.send_message(question)
+        await ctx.send(question)
         def check(msg):
-            return msg.author == interaction.user and msg.channel == interaction.channel
+            return msg.author == ctx.author and msg.channel == ctx.channel
 
         try:
             msg = await self.bot.wait_for('message', timeout=60.0, check=check)
             return msg.content
         except asyncio.TimeoutError:
-            await interaction.followup.send('You took too long to respond. Please try again.', ephemeral=True)
+            await ctx.send('You took too long to respond. Please try again.')
             return None
 
     @commands.command()
@@ -129,7 +129,7 @@ class Auction(commands.Cog):
         try:
             await ctx.send(embed=embed)
             logging.info("Auction request initiated.")
-            await self.open_auction_modal(ctx.interaction)
+            await self.open_auction_modal(ctx)
         except Exception as e:
             logging.error(f"An error occurred while sending the auction request message: {e}")
             await ctx.send(f"An error occurred while initiating the auction request: {str(e)}")
@@ -205,9 +205,9 @@ class Auction(commands.Cog):
         async with self.config.auctions() as auctions:
             auctions[auction["auction_id"]] = auction
 
-        bids = await self.config.bids()  # Ensure this is awaited
+        bids = await self.config.bids()
         highest_bid = max(
-            bids.get(str(auction["auction_id"]), {}).values(),  # Ensure .values() is used on actual dict
+            bids.get(str(auction["auction_id"]), {}).values(),
             key=lambda x: x.get("amount", 0),
             default=None,
         )
