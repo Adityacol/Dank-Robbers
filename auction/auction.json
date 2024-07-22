@@ -1,0 +1,9 @@
+{
+    "name": "Auction",
+    "author": ["Aditya and eren"],
+    "description": "A cog to handle auctions with bidding and donations.",
+    "install_msg": "Thank you for installing the Auction cog.",
+    "short": "Auction Cog",
+    "requirements": [],
+    "tags": ["auction", "bidding"]
+}
