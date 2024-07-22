@@ -59,12 +59,12 @@ class Auction(commands.Cog):
         auctions = self.bot.loop.run_until_complete(self.config.auctions())
         return str(max(map(int, auctions.keys()), default=0) + 1)
 
-    class AuctionModal(discord.ui.Modal):
+    class AuctionModal(Modal):
         def __init__(self, cog):
             self.cog = cog
             super().__init__(title="Request An Auction")
 
-        item_name = discord.ui.TextInput(
+        item_name = TextInput(
             label="What are you going to donate?",
             placeholder="e.g., Blob",
             required=True,
@@ -72,19 +72,19 @@ class Auction(commands.Cog):
             max_length=100,
             style=discord.TextStyle.short
         )
-        item_count = discord.ui.TextInput(
+        item_count = TextInput(
             label="How many of those items will you donate?",
             placeholder="e.g., 5",
             required=True,
             max_length=10
         )
-        minimum_bid = discord.ui.TextInput(
+        minimum_bid = TextInput(
             label="What should the minimum bid be?",
             placeholder="e.g., 1,000,000",
             required=False,
             style=discord.TextStyle.short
         )
-        message = discord.ui.TextInput(
+        message = TextInput(
             label="What is your message?",
             placeholder="e.g., I love DR!",
             required=False,
@@ -139,7 +139,7 @@ class Auction(commands.Cog):
                 logging.error(f"An error occurred in modal submission: {e}")
                 await interaction.response.send_message(f"An error occurred while processing your submission: {str(e)}", ephemeral=True)
 
-    class AuctionView(discord.ui.View):
+    class AuctionView(View):
         def __init__(self, cog):
             super().__init__(timeout=None)
             self.cog = cog
@@ -173,18 +173,20 @@ class Auction(commands.Cog):
     async def on_message_edit(self, before, after):
         """Handle message edits related to auction donations."""
         try:
-            if after.author.id == 270904126974590976 and hasattr(after.interaction, "name") and after.interaction.name == "serverevents donate" and before.embeds != after.embeds:
-                auctions = await self.config.auctions()
-                title = after.embeds[0].title
-                desc = after.embeds[0].description
-                
+            if after.author.id == 270904126974590976 and hasattr(after, "embeds") and after.embeds:
+                embed = after.embeds[0]
+                title = embed.title
+                desc = embed.description
+
                 if title != "Action Confirmed":
                     return
-                
+
                 parts = desc.split("**")
                 item_dank = str(parts[1].split(">")[1])
                 amount_dank = int(parts[1].split("<")[0])
                 
+                auctions = await self.config.auctions()
+
                 for auction_id, auction in auctions.items():
                     if auction["item"].strip().lower() == item_dank.strip().lower() and int(auction["amount"]) == amount_dank and auction["status"] == "pending" and after.channel.id == auction["ticket_channel_id"]:
                         auction["status"] = "active"
