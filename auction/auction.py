@@ -59,12 +59,12 @@ class Auction(commands.Cog):
         auctions = self.bot.loop.run_until_complete(self.config.auctions())
         return str(max(map(int, auctions.keys()), default=0) + 1)
 
-    class AuctionModal(Modal):
+    class AuctionModal(discord.ui.Modal):
         def __init__(self, cog):
             self.cog = cog
             super().__init__(title="Request An Auction")
 
-        item_name = TextInput(
+        item_name = discord.ui.TextInput(
             label="What are you going to donate?",
             placeholder="e.g., Blob",
             required=True,
@@ -72,19 +72,19 @@ class Auction(commands.Cog):
             max_length=100,
             style=discord.TextStyle.short
         )
-        item_count = TextInput(
+        item_count = discord.ui.TextInput(
             label="How many of those items will you donate?",
             placeholder="e.g., 5",
             required=True,
             max_length=10
         )
-        minimum_bid = TextInput(
+        minimum_bid = discord.ui.TextInput(
             label="What should the minimum bid be?",
             placeholder="e.g., 1,000,000",
             required=False,
             style=discord.TextStyle.short
         )
-        message = TextInput(
+        message = discord.ui.TextInput(
             label="What is your message?",
             placeholder="e.g., I love DR!",
             required=False,
@@ -139,7 +139,7 @@ class Auction(commands.Cog):
                 logging.error(f"An error occurred in modal submission: {e}")
                 await interaction.response.send_message(f"An error occurred while processing your submission: {str(e)}", ephemeral=True)
 
-    class AuctionView(View):
+    class AuctionView(discord.ui.View):
         def __init__(self, cog):
             super().__init__(timeout=None)
             self.cog = cog
@@ -210,14 +210,10 @@ class Auction(commands.Cog):
             logging.error(f"An error occurred in on_message_edit: {e}")
 
     async def start_auction_announcement(self, guild, auction, user_id, item, amount):
-        """Announce the start of the auction."""
-        auction_channel = guild.get_channel(1250501101615190066)  # Replace with your auction channel ID
-        if not auction_channel:
-            auction_channel = await guild.create_text_channel("auction-channel")
-        
-        user = await self.bot.fetch_user(user_id)
+        """Send an announcement for a new auction."""
+        auction_channel = self.bot.get_channel(1250501101615190066)  # Replace with your auction channel ID
         embed = discord.Embed(
-            title="🎉 Auction Started! 🎉",
+            title="🎉 New Auction! 🎉",
             description=f"**Item:** {item}\n**Amount:** {amount}\n**Starting Bid:** {auction['min_bid']}\n**Auction ID:** {auction['auction_id']}\n**Message:** {auction['message']}",
             color=discord.Color.green()
         )
@@ -319,4 +315,3 @@ class Auction(commands.Cog):
 
 def setup(bot: Red):
     bot.add_cog(Auction(bot))
-
