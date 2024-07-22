@@ -5,7 +5,6 @@ import aiohttp
 import asyncio
 import time
 import logging
-from discord.ui import Modal, TextInput, View, Button
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -59,117 +58,78 @@ class Auction(commands.Cog):
         auctions = self.bot.loop.run_until_complete(self.config.auctions())
         return str(max(map(int, auctions.keys()), default=0) + 1)
 
-    class AuctionModal(Modal):
-        def __init__(self, cog):
-            self.cog = cog
-            super().__init__(title="Request An Auction")
-
-        item_name = TextInput(
-            label="What are you going to donate?",
-            placeholder="e.g., Blob",
-            required=True,
-            min_length=1,
-            max_length=100,
-            style=discord.TextStyle.short
-        )
-        item_count = TextInput(
-            label="How many of those items will you donate?",
-            placeholder="e.g., 5",
-            required=True,
-            max_length=10
-        )
-        minimum_bid = TextInput(
-            label="What should the minimum bid be?",
-            placeholder="e.g., 1,000,000",
-            required=False,
-            style=discord.TextStyle.short
-        )
-        message = TextInput(
-            label="What is your message?",
-            placeholder="e.g., I love DR!",
-            required=False,
-            max_length=200,
-            style=discord.TextStyle.short
-        )
-
-        async def on_submit(self, interaction: discord.Interaction):
-            """Handle the form submission."""
-            try:
-                item_name = self.item_name.value
-                item_count = self.item_count.value
-
-                if not item_count.isdigit():
-                    await interaction.response.send_message("Item count must be a number.", ephemeral=True)
-                    return
-
-                item_count = int(item_count)
-                valid = await self.cog.api_check(interaction, item_count, item_name)
-                
-                if not valid:
-                    return
-
-                guild = interaction.guild
-                overwrites = {
-                    guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                    interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-                    self.cog.bot.user: discord.PermissionOverwrite(read_messages=True),
-                }
-                
-                ticket_channel = await guild.create_text_channel(f"ticket-{interaction.user.name}", overwrites=overwrites)
-                await ticket_channel.send(f"{interaction.user.mention}, please donate {item_count} of {item_name} as you have mentioned in the modal or you will get blacklisted.")
-                await interaction.response.send_message("Auction details submitted! Please donate the items within 30 minutes.", ephemeral=True)
-
-                auction_id = self.cog.get_next_auction_id()
-
-                auction_data = {
-                    "auction_id": auction_id,
-                    "user_id": interaction.user.id,
-                    "item": item_name,
-                    "amount": item_count,
-                    "min_bid": self.minimum_bid.value or "1,000,000",
-                    "message": self.message.value,
-                    "status": "pending",
-                    "ticket_channel_id": ticket_channel.id
-                }
-
-                async with self.cog.config.auctions() as auctions:
-                    auctions[auction_id] = auction_data
-
-            except Exception as e:
-                logging.error(f"An error occurred in modal submission: {e}")
-                await interaction.response.send_message(f"An error occurred while processing your submission: {str(e)}", ephemeral=True)
-
-class AuctionView(View):
-    def __init__(self, cog):
-        super().__init__(timeout=None)
-        self.cog = cog
-
-    @discord.ui.button(label="Request Auction", style=discord.ButtonStyle.green)
-    async def request_auction_button(self, button: discord.ui.Button, interaction: discord.Interaction):
+    async def open_auction_modal(self, interaction: discord.Interaction):
         """Open the auction request modal."""
-        try:
-            modal = self.cog.AuctionModal(self.cog)
-            await interaction.response.send_modal(modal)
-        except Exception as e:
-            logging.error(f"An error occurred while sending the modal: {e}")
-            await interaction.response.send_message(f"An error occurred while sending the modal: {str(e)}", ephemeral=True)
+        item_name = await self.prompt_for_input(interaction, "What are you going to donate?")
+        item_count = await self.prompt_for_input(interaction, "How many of those items will you donate?")
+        minimum_bid = await self.prompt_for_input(interaction, "What should the minimum bid be?", optional=True)
+        message = await self.prompt_for_input(interaction, "What is your message?", optional=True)
 
+        if not item_count.isdigit():
+            await interaction.response.send_message("Item count must be a number.", ephemeral=True)
+            return
+
+        item_count = int(item_count)
+        valid = await self.api_check(interaction, item_count, item_name)
+        
+        if not valid:
+            return
+
+        guild = interaction.guild
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            self.bot.user: discord.PermissionOverwrite(read_messages=True),
+        }
+        
+        ticket_channel = await guild.create_text_channel(f"ticket-{interaction.user.name}", overwrites=overwrites)
+        await ticket_channel.send(f"{interaction.user.mention}, please donate {item_count} of {item_name} as you have mentioned in the modal or you will get blacklisted.")
+        await interaction.response.send_message("Auction details submitted! Please donate the items within 30 minutes.", ephemeral=True)
+
+        auction_id = self.get_next_auction_id()
+
+        auction_data = {
+            "auction_id": auction_id,
+            "user_id": interaction.user.id,
+            "item": item_name,
+            "amount": item_count,
+            "min_bid": minimum_bid or "1,000,000",
+            "message": message or "",
+            "status": "pending",
+            "ticket_channel_id": ticket_channel.id
+        }
+
+        async with self.config.auctions() as auctions:
+            auctions[auction_id] = auction_data
+
+    async def prompt_for_input(self, interaction: discord.Interaction, question: str, optional: bool = False) -> str:
+        """Prompt the user for input."""
+        await interaction.response.send_message(question)
+        def check(msg):
+            return msg.author == interaction.user and msg.channel == interaction.channel
+
+        try:
+            msg = await self.bot.wait_for('message', timeout=60.0, check=check)
+            return msg.content
+        except asyncio.TimeoutError:
+            await interaction.followup.send('You took too long to respond. Please try again.', ephemeral=True)
+            return None
 
     @commands.command()
     async def requestauction(self, ctx: commands.Context):
         """Request a new auction."""
-        view = self.AuctionView(self)
         embed = discord.Embed(
             title="🎉 Request an Auction 🎉",
-            description="Click the button below to request an auction and submit your donation details.",
+            description="Reply with your donation details to request an auction.",
             color=discord.Color.blue()
         )
         embed.set_thumbnail(url=self.bot.user.display_avatar.url)
-        embed.add_field(name="How it works", value="1. Click the button below.\n2. Fill out the modal with donation details.\n3. Await further instructions in your private channel.", inline=False)
+        embed.add_field(name="How it works", value="1. Reply with your donation details.\n2. Await further instructions in your private channel.", inline=False)
         embed.set_footer(text="Thank you for contributing to our community!")
         try:
-            await ctx.send(embed=embed, view=view)
+            await ctx.send(embed=embed)
             logging.info("Auction request initiated.")
+            await self.open_auction_modal(ctx.interaction)
         except Exception as e:
             logging.error(f"An error occurred while sending the auction request message: {e}")
             await ctx.send(f"An error occurred while initiating the auction request: {str(e)}")
@@ -235,7 +195,7 @@ class AuctionView(View):
         """Run the auction timer."""
         await asyncio.sleep(30 * 60)  # 30 minutes auction duration
         current_time = int(time.time())
-        if current_time >= auction.get("end_time", 0):
+        if current_time >= auction["end_time"]:
             await self.end_auction(auction)
 
     async def end_auction(self, auction):
@@ -244,10 +204,10 @@ class AuctionView(View):
         auction["status"] = "ended"
         async with self.config.auctions() as auctions:
             auctions[auction["auction_id"]] = auction
-        
-        bids = await self.config.bids()
+
+        bids = await self.config.bids()  # Ensure this is awaited
         highest_bid = max(
-            bids.get(auction["auction_id"], {}).values(),
+            bids.get(str(auction["auction_id"]), {}).values(),  # Ensure .values() is used on actual dict
             key=lambda x: x.get("amount", 0),
             default=None,
         )
@@ -277,56 +237,6 @@ class AuctionView(View):
                 await auction_channel.send(embed=embed)
             except Exception as e:
                 logging.error(f"An error occurred while sending the auction end announcement: {e}")
-
-    @commands.command()
-    async def bid(self, ctx: commands.Context, auction_id: int, bid_amount: int):
-        """Place a bid on an auction."""
-        auctions = await self.config.auctions()
-        auction = auctions.get(str(auction_id))
-
-        if not auction:
-            await ctx.send("Invalid auction ID.")
-            return
-
-        if auction["status"] != "active":
-            await ctx.send("Auction is not active.")
-            return
-
-        if bid_amount <= int(auction["min_bid"].replace(",", "")):
-            await ctx.send("Bid amount is less than the minimum bid.")
-            return
-
-        async with self.config.bids() as bids:
-            if str(auction_id) not in bids:
-                bids[str(auction_id)] = {}
-
-            bids[str(auction_id)][str(ctx.author.id)] = {
-                "user_id": ctx.author.id,
-                "amount": bid_amount
-            }
-
-        await ctx.send(f"Your bid of {bid_amount} has been placed for auction ID {auction_id}.")
-        logging.info(f"Bid placed: {ctx.author} bid {bid_amount} on auction {auction_id}.")
-
-    @commands.command()
-    async def cancelauction(self, ctx: commands.Context, auction_id: int):
-        """Cancel an auction."""
-        auctions = await self.config.auctions()
-        auction = auctions.get(str(auction_id))
-
-        if not auction:
-            await ctx.send("Invalid auction ID.")
-            return
-
-        if auction["status"] != "pending":
-            await ctx.send("Only pending auctions can be cancelled.")
-            return
-
-        async with self.config.auctions() as auctions:
-            del auctions[str(auction_id)]
-
-        await ctx.send(f"Auction ID {auction_id} has been cancelled.")
-        logging.info(f"Auction {auction_id} cancelled by {ctx.author}.")
 
 def setup(bot: Red):
     bot.add_cog(Auction(bot))
