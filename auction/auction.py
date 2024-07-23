@@ -2,11 +2,11 @@ import discord
 from redbot.core import commands, Config
 from redbot.core.bot import Red
 import aiohttp
-import discord.ui
 import asyncio
 import time
 import logging
-from discord.ui import Modal, TextInput, View, Button, TextInputStyle
+from discord.ui import Modal, TextInput, View, Button
+from discord.enums import TextInputStyle
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
