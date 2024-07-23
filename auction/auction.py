@@ -2,6 +2,7 @@ import discord
 from redbot.core import commands, Config
 from redbot.core.bot import Red
 import aiohttp
+import discord.ui
 import asyncio
 import time
 import logging
