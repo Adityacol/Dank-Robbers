@@ -5,7 +5,7 @@ import aiohttp
 import asyncio
 import time
 import logging
-from discord.ui import Modal, TextInput, View, TextInputStyle
+from discord.ui import Modal, TextInput, View, Button, TextInputStyle
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -76,7 +76,8 @@ class Auction(commands.Cog):
             label="How many of those items will you donate?",
             placeholder="e.g., 5",
             required=True,
-            max_length=10
+            max_length=10,
+            style=TextInputStyle.short
         )
         minimum_bid = TextInput(
             label="What should the minimum bid be?",
@@ -214,7 +215,7 @@ class Auction(commands.Cog):
         auction_channel = self.bot.get_channel(1250501101615190066)  # Replace with your auction channel ID
         embed = discord.Embed(
             title="🎉 New Auction! 🎉",
-            description=f"**Item:** {item}\n**Amount:** {amount}\n**Starting Bid:** {auction['min_bid']}\n**Auction ID:** {auction['auction_id']}\n**Message:** {auction['message']}",
+            description=f"**Item:** {item}\n**Amount:** {amount}\n**Starting Bid:** {auction['min_bid']}\n**Auction ID:** {auction['auction_id']}\n**Message:** {auction['message']}\n**Donated by:** {await self.bot.fetch_user(user_id).mention}",
             color=discord.Color.green()
         )
         embed.set_thumbnail(url=self.bot.user.display_avatar.url)
