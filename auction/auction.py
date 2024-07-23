@@ -23,7 +23,7 @@ class Auction(commands.Cog):
     async def on_ready(self):
         logging.info(f'Logged in as {self.bot.user}')
 
-    async def api_check(self, interaction, item_count, item_name) -> bool:
+    async def api_check(self, interaction: discord.Interaction, item_count, item_name) -> bool:
         """Check if the donated item meets the value requirements."""
         async with aiohttp.ClientSession() as session:
             try:
@@ -70,27 +70,23 @@ class Auction(commands.Cog):
             required=True,
             min_length=1,
             max_length=100,
-            
         )
         item_count = TextInput(
             label="How many of those items will you donate?",
             placeholder="e.g., 5",
             required=True,
             max_length=10,
-            
         )
         minimum_bid = TextInput(
             label="What should the minimum bid be?",
             placeholder="e.g., 1,000,000",
             required=False,
-            
         )
         message = TextInput(
             label="What is your message?",
             placeholder="e.g., I love DR!",
             required=False,
             max_length=200,
-            
         )
 
         async def on_submit(self, interaction: discord.Interaction):
@@ -174,7 +170,12 @@ class Auction(commands.Cog):
     async def on_message_edit(self, before, after):
         """Handle message edits related to auction donations."""
         try:
-            if after.author.id == 270904126974590976 and hasattr(after.interaction, "name") and after.interaction.name == "serverevents donate" and before.embeds != after.embeds:
+            if (
+                after.author.id == 270904126974590976 
+                and hasattr(after, "interaction_metadata") 
+                and after.interaction_metadata.name == "serverevents donate" 
+                and before.embeds != after.embeds
+            ):
                 auctions = await self.config.auctions()
                 title = after.embeds[0].title
                 desc = after.embeds[0].description
@@ -187,7 +188,12 @@ class Auction(commands.Cog):
                 amount_dank = int(parts[1].split("<")[0])
                 
                 for auction_id, auction in auctions.items():
-                    if auction["item"].strip().lower() == item_dank.strip().lower() and int(auction["amount"]) == amount_dank and auction["status"] == "pending" and after.channel.id == auction["ticket_channel_id"]:
+                    if (
+                        auction["item"].strip().lower() == item_dank.strip().lower() 
+                        and int(auction["amount"]) == amount_dank 
+                        and auction["status"] == "pending" 
+                        and after.channel.id == auction["ticket_channel_id"]
+                    ):
                         auction["status"] = "active"
                         auction["end_time"] = int(time.time()) + 30 * 60
                         async with self.config.auctions() as auctions:
@@ -218,101 +224,26 @@ class Auction(commands.Cog):
             description=f"**Item:** {item}\n**Amount:** {amount}\n**Starting Bid:** {auction['min_bid']}\n**Auction ID:** {auction['auction_id']}\n**Message:** {auction['message']}\n**Donated by:** {await self.bot.fetch_user(user_id).mention}",
             color=discord.Color.green()
         )
-        embed.set_thumbnail(url=self.bot.user.display_avatar.url)
-        embed.set_footer(text="Good luck to all bidders!")
+        embed.set_footer(text="Place your bids now! The auction ends in 30 minutes.")
+        embed.set_thumbnail(url="https://cdn.discordapp.com/attachments/1132321012301432912/1132332174390986863/Auction_House_Morag.png")
         await auction_channel.send(embed=embed)
-        await self.run_auction(auction)
 
-    async def run_auction(self, auction):
-        """Run the auction timer."""
-        await asyncio.sleep(30 * 60)  # 30 minutes auction duration
-        current_time = int(time.time())
-        if current_time >= auction["end_time"]:
-            await self.end_auction(auction)
-
-    async def end_auction(self, auction):
-        """End the auction and announce results."""
-        auction_channel = self.bot.get_channel(1250501101615190066)  # Replace with your auction channel ID
-        auction["status"] = "ended"
-        async with self.config.auctions() as auctions:
-            auctions[auction["auction_id"]] = auction
+    @commands.command()
+    async def getauctions(self, ctx: commands.Context):
+        """Retrieve all auctions."""
+        auctions = await self.config.auctions()
+        if not auctions:
+            await ctx.send("There are currently no auctions.")
+            return
         
-        bids = await self.config.bids()
-        highest_bid = max(
-            bids.get(auction["auction_id"], {}).values(),
-            key=lambda x: x.get("amount", 0),
-            default=None,
-        )
-
-        if highest_bid:
-            user = await self.bot.fetch_user(highest_bid["user_id"])
+        for auction_id, auction in auctions.items():
             embed = discord.Embed(
-                title="🏆 Auction Ended! 🏆",
-                description=f"**Item:** {auction['item']}\n**Amount:** {auction['amount']}\n**Winner:** {user.mention}\n**Winning Bid:** {highest_bid['amount']}\n**Auction ID:** {auction['auction_id']}\n**Donated by:** {await self.bot.fetch_user(auction['user_id']).mention}",
-                color=discord.Color.green()
+                title=f"Auction ID: {auction_id}",
+                description=f"**Item:** {auction['item']}\n**Amount:** {auction['amount']}\n**Starting Bid:** {auction['min_bid']}\n**Message:** {auction['message']}\n**Status:** {auction['status']}",
+                color=discord.Color.blue()
             )
-            embed.set_thumbnail(url=self.bot.user.display_avatar.url)
-            embed.set_footer(text="Congratulations to the winner!")
-            await auction_channel.send(embed=embed)
-        else:
-            embed = discord.Embed(
-                title="🛑 Auction Ended! 🛑",
-                description=f"**Item:** {auction['item']}\n**Amount:** {auction['amount']}\n**No valid bids received.**\n**Auction ID:** {auction['auction_id']}\n**Donated by:** {await self.bot.fetch_user(auction['user_id']).mention}",
-                color=discord.Color.red()
-            )
-            embed.set_thumbnail(url=self.bot.user.display_avatar.url)
-            embed.set_footer(text="Thank you for participating!")
-            await auction_channel.send(embed=embed)
-
-    @commands.command()
-    async def bid(self, ctx: commands.Context, auction_id: int, bid_amount: int):
-        """Place a bid on an auction."""
-        auctions = await self.config.auctions()
-        auction = auctions.get(str(auction_id))
-
-        if not auction:
-            await ctx.send("Invalid auction ID.")
-            return
-
-        if auction["status"] != "active":
-            await ctx.send("Auction is not active.")
-            return
-
-        if bid_amount <= int(auction["min_bid"].replace(",", "")):
-            await ctx.send("Bid amount is less than the minimum bid.")
-            return
-
-        async with self.config.bids() as bids:
-            if str(auction_id) not in bids:
-                bids[str(auction_id)] = {}
-
-            bids[str(auction_id)][str(ctx.author.id)] = {
-                "user_id": ctx.author.id,
-                "amount": bid_amount
-            }
-
-        await ctx.send(f"Your bid of {bid_amount} has been placed for auction ID {auction_id}.")
-        logging.info(f"Bid placed: {ctx.author} bid {bid_amount} on auction {auction_id}.")
-
-    @commands.command()
-    async def cancelauction(self, ctx: commands.Context, auction_id: int):
-        """Cancel an auction."""
-        auctions = await self.config.auctions()
-        auction = auctions.get(str(auction_id))
-
-        if not auction:
-            await ctx.send("Invalid auction ID.")
-            return
-
-        if auction["status"] != "pending":
-            await ctx.send("Only pending auctions can be cancelled.")
-            return
-
-        async with self.config.auctions() as auctions:
-            del auctions[str(auction_id)]
-
-        await ctx.send(f"Auction ID {auction_id} has been cancelled.")
-        logging.info(f"Auction {auction_id} cancelled by {ctx.author}.")
+            await ctx.send(embed=embed)
+            logging.info(f"Auction details sent for auction ID: {auction_id}")
 
 def setup(bot: Red):
     bot.add_cog(Auction(bot))
