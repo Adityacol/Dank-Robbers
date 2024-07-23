@@ -6,7 +6,6 @@ import asyncio
 import time
 import logging
 from discord.ui import Modal, TextInput, View, Button
-from discord.enums import TextInputStyle
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -71,27 +70,27 @@ class Auction(commands.Cog):
             required=True,
             min_length=1,
             max_length=100,
-            style=TextInputStyle.short
+            
         )
         item_count = TextInput(
             label="How many of those items will you donate?",
             placeholder="e.g., 5",
             required=True,
             max_length=10,
-            style=TextInputStyle.short
+            
         )
         minimum_bid = TextInput(
             label="What should the minimum bid be?",
             placeholder="e.g., 1,000,000",
             required=False,
-            style=TextInputStyle.short
+            
         )
         message = TextInput(
             label="What is your message?",
             placeholder="e.g., I love DR!",
             required=False,
             max_length=200,
-            style=TextInputStyle.short
+            
         )
 
         async def on_submit(self, interaction: discord.Interaction):
