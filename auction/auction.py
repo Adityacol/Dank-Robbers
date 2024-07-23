@@ -137,19 +137,20 @@ class Auction(commands.Cog):
                 await interaction.response.send_message(f"An error occurred while processing your submission: {str(e)}", ephemeral=True)
 
     class AuctionView(View):
-        def __init__(self, cog):
-            super().__init__(timeout=None)
-            self.cog = cog
+      def __init__(self, cog):
+        super().__init__(timeout=None)
+        self.cog = cog
 
-        @discord.ui.button(label="Request Auction", style=discord.ButtonStyle.green)
-        async def request_auction_button(self, button: discord.ui.Button, interaction: discord.Interaction):
-            """Open the auction request modal."""
-            try:
-                modal = self.cog.AuctionModal(self.cog)
-                await interaction.response.send_modal(modal)
-            except Exception as e:
-                logging.error(f"An error occurred while sending the modal: {e}")
-                await interaction.response.send_message(f"An error occurred while sending the modal: {str(e)}", ephemeral=True)
+    @discord.ui.button(label="Request Auction", style=discord.ButtonStyle.green)
+    async def request_auction_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Open the auction request modal."""
+        try:
+            modal = self.cog.AuctionModal(self.cog)
+            await interaction.response.send_modal(modal)
+        except Exception as e:
+            logging.error(f"An error occurred while sending the modal: {e}")
+            await interaction.response.send_message(f"An error occurred while sending the modal: {str(e)}", ephemeral=True)
+
 
     @commands.command()
     async def requestauction(self, ctx: commands.Context):
