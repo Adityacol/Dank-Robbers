@@ -2,9 +2,8 @@ import discord
 from redbot.core import commands, Config
 from redbot.core.bot import Red
 import aiohttp
-import asyncio
-import time
 import logging
+import time
 from discord.ui import Modal, TextInput, View, Button
 
 # Set up logging
@@ -44,8 +43,8 @@ class Auction(commands.Cog):
                     item_value = item_data.get("value", 0)
                     total_value = item_value * item_count
                     
-                    if total_value < 20000000:  # Changed to 20 million
-                        await interaction.response.send_message("The total donation value must be over 20 million.", ephemeral=True)
+                    if total_value < 100000000:  # Ensure total donation value is over 100 million
+                        await interaction.response.send_message("The total donation value must be over 100 million.", ephemeral=True)
                         return False
 
             except Exception as e:
@@ -172,99 +171,68 @@ class Auction(commands.Cog):
         logging.info("Auction request initiated.")
 
     @commands.Cog.listener()
-    async def on_message_edit(self, before, after):
-        """Handle message edits related to auction donations."""
+    async def on_message(self, message: discord.Message):
+        """Track messages for item donations."""
         try:
             if (
-                after.author.id == 270904126974590976  # Dank Memer Bot ID
-                and hasattr(after, "interaction_metadata") 
-                and after.interaction_metadata.name == "serverevents donate" 
-                and before.embeds != after.embeds
+                message.author.id == 270904126974590976  # ID of the Dank Memer bot
+                and message.embeds  # Check if message has embeds
+                and message.interaction  # Check if the message is an interaction response
+                and message.interaction.name == "serverevents donate"
             ):
                 auctions = await self.config.auctions()
-                title = after.embeds[0].title
-                desc = after.embeds[0].description
+                title = message.embeds[0].title
+                description = message.embeds[0].description
                 
-                if title != "Action Confirmed":
+                if title != "Successfully donated 1x Bolt Cutters":  # Adjust the title check according to your needs
                     return
                 
-                parts = desc.split("**")
-                item_dank = str(parts[1].split(">")[1])
-                amount_dank = int(parts[1].split("<")[0])
+                parts = description.split("**")
+                item_dank = parts[1].split(">")[1].strip()
+                amount_dank = int(parts[1].split("<")[0].strip())
                 
                 for auction_id, auction in auctions.items():
                     if (
                         auction["item"].strip().lower() == item_dank.strip().lower() 
                         and int(auction["amount"]) == amount_dank 
                         and auction["status"] == "pending" 
-                        and after.channel.id == auction["ticket_channel_id"]
+                        and message.channel.id == auction["ticket_channel_id"]
                     ):
                         auction["status"] = "active"
-                        auction["end_time"] = int(time.time()) + 30 * 60
+                        auction["end_time"] = int(time.time()) + 30 * 60  # Auction ends in 30 minutes
                         async with self.config.auctions() as auctions:
                             auctions[auction_id] = auction
                         
                         user = await self.bot.fetch_user(auction["user_id"])
-                        await after.channel.send(f"Item: {item_dank}, Amount: {amount_dank}")
+                        await message.channel.send(f"Item: {item_dank}, Amount: {amount_dank}")
                         await user.send("Thank you for your donation! Your auction will start shortly.")
-                        ticket_channel = after.guild.get_channel(auction["ticket_channel_id"])
+                        
+                        ticket_channel = message.guild.get_channel(auction["ticket_channel_id"])
                         
                         if ticket_channel:
                             await ticket_channel.delete()
                         
-                        await self.start_auction_announcement(after.guild, auction, auction["user_id"], auction["item"], auction["amount"])
+                        await self.start_auction_announcement(message.guild, auction, auction["user_id"], auction["item"], auction["amount"])
                         return
                 
-                await after.channel.send("The donated item or amount does not match the saved auction details.")
+                await message.channel.send("The donated item or amount does not match the saved auction details.")
                 logging.info("Mismatch in donated item or amount.")
                 
         except Exception as e:
-            logging.error(f"An error occurred in on_message_edit: {e}")
+            logging.error(f"An error occurred in on_message: {e}")
 
     async def start_auction_announcement(self, guild, auction, user_id, item, amount):
         """Send an announcement for a new auction."""
         auction_channel = self.bot.get_channel(1257926928300769290)  # Replace with your auction channel ID
         embed = discord.Embed(
             title="🎉 New Auction! 🎉",
-            description=f"**Item:** {item}\n**Amount:** {amount}\n**Minimum Bid:** {auction['min_bid']}\n**Auction End Time:** <t:{auction['end_time']}:R>",
+            description=f"**Item:** {item}\n**Amount:** {amount}\n**Minimum Bid:** {auction['min_bid']}\n**Auction ends in:** 30 minutes\n**Message from the Donor:** {auction['message']}",
             color=discord.Color.gold()
         )
-        embed.set_thumbnail(url=self.bot.user.display_avatar.url)
         embed.set_footer(text=f"Auction ID: {auction['auction_id']}")
+        embed.set_author(name="Auction House", icon_url=guild.icon.url)
+        await auction_channel.send(embed=embed)
+        logging.info(f"New auction started: {auction['auction_id']}")
 
-        auction_message = await auction_channel.send(embed=embed)
-        
-        # Save the auction message ID for tracking bids
-        async with self.config.auctions() as auctions:
-            auctions[auction["auction_id"]]["message_id"] = auction_message.id
-
-        # Update auction status
-        async with self.config.auctions() as auctions:
-            auctions[auction["auction_id"]]["status"] = "ongoing"
-
-        logging.info(f"Started auction: {auction['auction_id']}")
-
-    @commands.Cog.listener()
-    async def on_message(self, message):
-        """Track bids and donations."""
-        if message.author.bot:
-            return
-
-        auctions = await self.config.auctions()
-        for auction_id, auction in auctions.items():
-            if auction.get("message_id") == message.id:
-                bid = int(message.content.replace(",", "").replace(" ", "").replace("k", "000").replace("m", "000000").replace("b", "000000000"))
-                min_bid = int(auction["min_bid"].replace(",", "").replace("k", "000").replace("m", "000000").replace("b", "000000000"))
-                
-                if bid >= min_bid:
-                    async with self.config.bids() as bids:
-                        bids[auction_id] = {"user_id": message.author.id, "amount": bid}
-                    
-                    await message.channel.send(f"{message.author.mention} has placed a bid of {bid:,}!")
-                    logging.info(f"Bid placed: {bid} by {message.author.id} on auction {auction_id}")
-                else:
-                    await message.channel.send(f"{message.author.mention}, your bid of {bid:,} is below the minimum bid of {min_bid:,}. Please bid higher.")
-
-# Add the cog to the bot
 def setup(bot: Red):
     bot.add_cog(Auction(bot))
