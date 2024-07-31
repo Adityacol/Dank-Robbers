@@ -54,9 +54,9 @@ class Auction(commands.Cog):
                 return False
         return True
 
-    def get_next_auction_id(self):
+    async def get_next_auction_id(self):
         """Generate the next auction ID."""
-        auctions = self.bot.loop.run_until_complete(self.config.auctions())
+        auctions = await self.config.auctions()
         return str(max(map(int, auctions.keys()), default=0) + 1)
 
     class AuctionModal(Modal):
@@ -64,30 +64,35 @@ class Auction(commands.Cog):
             self.cog = cog
             super().__init__(title="Request An Auction")
 
-        item_name = TextInput(
-            label="What are you going to donate?",
-            placeholder="e.g., Blob",
-            required=True,
-            min_length=1,
-            max_length=100,
-        )
-        item_count = TextInput(
-            label="How many of those items will you donate?",
-            placeholder="e.g., 5",
-            required=True,
-            max_length=10,
-        )
-        minimum_bid = TextInput(
-            label="What should the minimum bid be?",
-            placeholder="e.g., 1,000,000",
-            required=False,
-        )
-        message = TextInput(
-            label="What is your message?",
-            placeholder="e.g., I love DR!",
-            required=False,
-            max_length=200,
-        )
+            self.item_name = TextInput(
+                label="What are you going to donate?",
+                placeholder="e.g., Blob",
+                required=True,
+                min_length=1,
+                max_length=100,
+            )
+            self.item_count = TextInput(
+                label="How many of those items will you donate?",
+                placeholder="e.g., 5",
+                required=True,
+                max_length=10,
+            )
+            self.minimum_bid = TextInput(
+                label="What should the minimum bid be?",
+                placeholder="e.g., 1,000,000",
+                required=False,
+            )
+            self.message = TextInput(
+                label="What is your message?",
+                placeholder="e.g., I love DR!",
+                required=False,
+                max_length=200,
+            )
+
+            self.add_item(self.item_name)
+            self.add_item(self.item_count)
+            self.add_item(self.minimum_bid)
+            self.add_item(self.message)
 
         async def on_submit(self, interaction: discord.Interaction):
             """Handle the form submission."""
@@ -116,7 +121,7 @@ class Auction(commands.Cog):
                 await ticket_channel.send(f"{interaction.user.mention}, please donate {item_count} of {item_name} as you have mentioned in the modal or you will get blacklisted.")
                 await interaction.response.send_message("Auction details submitted! Please donate the items within 30 minutes.", ephemeral=True)
 
-                auction_id = self.cog.get_next_auction_id()
+                auction_id = await self.cog.get_next_auction_id()
 
                 auction_data = {
                     "auction_id": auction_id,
@@ -137,25 +142,24 @@ class Auction(commands.Cog):
                 await interaction.response.send_message(f"An error occurred while processing your submission: {str(e)}", ephemeral=True)
 
     class AuctionView(View):
-      def __init__(self, cog):
-        super().__init__(timeout=None)
-        self.cog = cog
+        def __init__(self, cog):
+            super().__init__(timeout=None)
+            self.cog = cog
 
-    @discord.ui.button(label="Request Auction", style=discord.ButtonStyle.green)
-    async def request_auction_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Open the auction request modal."""
-        try:
-            modal = self.cog.AuctionModal(self.cog)
-            await interaction.response.send_modal(modal)
-        except Exception as e:
-            logging.error(f"An error occurred while sending the modal: {e}")
-            await interaction.response.send_message(f"An error occurred while sending the modal: {str(e)}", ephemeral=True)
-
+        @discord.ui.button(label="Request Auction", style=discord.ButtonStyle.green)
+        async def request_auction_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+            """Open the auction request modal."""
+            try:
+                modal = Auction.AuctionModal(self.cog)
+                await interaction.response.send_modal(modal)
+            except Exception as e:
+                logging.error(f"An error occurred while sending the modal: {e}")
+                await interaction.response.send_message(f"An error occurred while sending the modal: {str(e)}", ephemeral=True)
 
     @commands.command()
     async def requestauction(self, ctx: commands.Context):
         """Request a new auction."""
-        view = self.AuctionView(self)
+        view = Auction.AuctionView(self)
         embed = discord.Embed(
             title="🎉 Request an Auction 🎉",
             description="Click the button below to request an auction and submit your donation details.",
