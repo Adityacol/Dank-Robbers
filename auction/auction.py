@@ -211,21 +211,16 @@ class Auction(commands.Cog):
                 amount_dank = int(parts[1].split("<")[0])
                 
                 for auction_id, auction in auctions.items():
-                    if (
-                        auction["item"].strip().lower() == item_dank.strip().lower() 
-                        and int(auction["amount"]) == amount_dank 
-                        and auction["status"] == "pending" 
-                        and after.channel.id == auction["ticket_channel_id"]
-                    ):
+                    if auction["status"] == "pending" and auction["item"] == item_dank and auction["amount"] == amount_dank:
                         auction["status"] = "active"
-                        auction["end_time"] = int(time.time()) + 30 * 60
-                        async with self.config.auctions() as auctions:
-                            auctions[auction_id] = auction
+                        auction["end_time"] = int(time.time()) + 1800
+                        await self.config.auctions.set_raw(auction_id, value=auction)
                         
-                        user = await self.bot.fetch_user(auction["user_id"])
-                        await after.channel.send(f"Item: {item_dank}, Amount: {amount_dank}")
-                        await user.send("Thank you for your donation! Your auction will start shortly.")
-                        ticket_channel = after.guild.get_channel(auction["ticket_channel_id"])
+                        user = self.bot.get_user(auction["user_id"])
+                        if user:
+                            await user.send("Donation confirmed. Your auction is now active and will last for 30 minutes.")
+                        
+                        ticket_channel = self.bot.get_channel(auction["ticket_channel_id"])
                         if ticket_channel:
                             await ticket_channel.send("Donation confirmed. Your auction is now active.")
         except Exception as e:
