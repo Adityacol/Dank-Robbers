@@ -5,6 +5,7 @@ from redbot.core.bot import Red
 import aiohttp
 import asyncio
 import time
+from discord.ext import tasks
 import logging
 
 # Set up logging
@@ -18,6 +19,7 @@ class Auction(commands.Cog):
         self.config = Config.get_conf(self, identifier=1234567890, force_registration=True)
         self.config.register_global(auctions={})
         self.config.register_global(bids={})
+        self.auction_task.start()
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -222,6 +224,30 @@ class Auction(commands.Cog):
                             await ticket_channel.send("Donation confirmed. Your auction is now active.")
         except Exception as e:
             logging.error(f"An error occurred in on_message_edit listener: {e}")
+
+    @tasks.loop(seconds=60)
+    async def auction_task(self):
+        """Periodic task to check for auction expirations."""
+        auctions = await self.config.auctions()
+        current_time = int(time.time())
+        for auction_id, auction in auctions.items():
+            if auction["status"] == "active" and current_time >= auction["end_time"]:
+                auction["status"] = "ended"
+                await self.config.auctions.set_raw(auction_id, value=auction)
+
+                user = self.bot.get_user(auction["user_id"])
+                if user:
+                    await user.send("Your auction has ended.")
+                
+                ticket_channel = self.bot.get_channel(auction["ticket_channel_id"])
+                if ticket_channel:
+                    await ticket_channel.send("The auction has ended.")
+                    await ticket_channel.delete()
+        logging.info("Auction task executed.")
+
+    @auction_task.before_loop
+    async def before_auction_task(self):
+        await self.bot.wait_until_ready()
 
 async def setup(bot: Red):
     await bot.add_cog(Auction(bot))
