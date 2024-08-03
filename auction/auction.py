@@ -132,6 +132,21 @@ class Auction(commands.Cog):
                 async with self.cog.config.auctions() as auctions:
                     auctions[auction_id] = auction_data
 
+                # Send auction details with lock button
+                item_value = item_count * 16375000  # Example calculation for item value
+                fee = item_value * 0.02  # 2% fee
+                embed = discord.Embed(
+                    title="Your Auction Detail",
+                    description=f"**{item_count}x {item_name}**\n"
+                                f"**Minimum bid:** {self.minimum_bid.value or '1,000,000'}\n"
+                                f"**Channeltype:** NORMAL\n"
+                                f"Total worth: {item_value:,}\n"  
+                                f"Your fee (2%): {fee:,}\n"
+                                "Type `/auction makechanges` to make changes",
+                    color=discord.Color.blue()
+                )
+                await ticket_channel.send(embed=embed, view=self.cog.TicketView(ticket_channel))
+
             except Exception as e:
                 logging.error(f"An error occurred in modal submission: {e}")
                 await interaction.response.send_message(f"An error occurred while processing your submission: {str(e)}", ephemeral=True)
