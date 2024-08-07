@@ -1,0 +1,8 @@
+{
+    "author": ["aditya"],
+    "install_msg": "Thank you for installing this repository! If you encounter any issues or have any questions, feel free to reach out.",
+    "name": "EmbedTracker",
+    "short": "A repository of cogs for tracking Rumble Royale winners.",
+    "description": "This repository contains a collection of cogs designed for tracking Rumble Royale winners, sending congratulatory messages, and handling payment confirmations. The cogs are tailored for Discord bots using the Red-DiscordBot framework.",
+    "tags": ["Discord", "Rumble Royale", "Bot", "Embeds", "Red-DiscordBot"]
+}
