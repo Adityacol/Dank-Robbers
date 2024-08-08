@@ -5,7 +5,7 @@ import re
 class EmbedTracker(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.tracked_channel_ids = [1186946772568915988, 1186946772568915988, 1166668987032150026, 1167108764617424918, 1166669120977240125]  # IDs of the channels to track
+        self.tracked_channel_ids = [1186946772568915988, 1166668859097501706, 1166668987032150026, 1167108764617424918, 1166669120977240125]  # IDs of the channels to track
         self.target_channel_id = 1169204863524155453  # ID of the channel where you want to send the winner ID
         self.bot_user_id = 693167035068317736  # ID of the bot that sends the Rumble Royale messages
         self.payment_role_id = 1018578013140566137  # ID of the role that can confirm payment
