@@ -94,7 +94,7 @@ class AdvancedAuction(commands.Cog):
                     total_value = item_value * item_count
                     tax = total_value * 0.10  # 10% tax
                     
-                    if total_value < 1000000:  # 50 million
+                    if total_value < 50000000:  # 50 million
                         await self.safe_send(interaction, "The total donation value must be over 50 million.", ephemeral=True)
                         return None, None, None
 
@@ -104,12 +104,6 @@ class AdvancedAuction(commands.Cog):
                 await self.safe_send(interaction, f"An error occurred while fetching item value: {str(e)}", ephemeral=True)
                 logging.error(f"Exception in API check: {e}")
                 return None, None, None
-
-    async def get_next_auction_id(self, guild: discord.Guild):
-        """Generate the next auction ID."""
-        auctions = await self.config.guild(guild).auctions()
-        next_id = str(max(map(int, auctions.keys()), default=0) + 1)
-        return f"{guild.id}-{next_id}"
 
     async def get_next_auction_id(self, guild: discord.Guild):
         """Generate the next auction ID."""
@@ -194,13 +188,6 @@ class AdvancedAuction(commands.Cog):
                         await interaction.user.add_roles(auction_role)
 
                 await self.cog.safe_send(interaction, f"Auction channel created: {ticket_channel.mention}", ephemeral=True)
-
-                # Schedule the auction end
-                self.cog.bot.loop.create_task(self.cog.schedule_auction_end(auction_id, 21600))  # 6 hours
-
-            except Exception as e:
-                logging.error(f"An error occurred in modal submission: {e}")
-                await self.cog.safe_send(interaction, f"An error occurred while processing your submission: {str(e)}", ephemeral=True)
 
                 # Schedule the auction end
                 self.cog.bot.loop.create_task(self.cog.schedule_auction_end(auction_id, 21600))  # 6 hours
