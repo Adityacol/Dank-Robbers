@@ -112,7 +112,7 @@ class AdvancedAuction(commands.Cog):
         next_id = max(existing_ids, default=0) + 1
         return f"{guild.id}-{next_id}"
 
-    class AuctionModal(Modal):
+class AuctionModal(Modal):
     def __init__(self, cog):
         self.cog = cog
         super().__init__(title="Request An Auction")
