@@ -113,88 +113,103 @@ class AdvancedAuction(commands.Cog):
         return f"{guild.id}-{next_id}"
 
     class AuctionModal(Modal):
-        def __init__(self, cog):
-            self.cog = cog
-            super().__init__(title="Request An Auction")
+    def __init__(self, cog):
+        self.cog = cog
+        super().__init__(title="Request An Auction")
 
-        item_name = TextInput(label="What are you going to donate?", placeholder="e.g., Blob", required=True, min_length=1, max_length=100)
-        item_count = TextInput(label="How many of those items will you donate?", placeholder="e.g., 5", required=True, max_length=10)
-        minimum_bid = TextInput(label="What should the minimum bid be?", placeholder="e.g., 1,000,000", required=False)
-        message = TextInput(label="What is your message?", placeholder="e.g., I love DR!", required=False, max_length=200)
+    item_name = TextInput(label="What are you going to donate?", placeholder="e.g., Blob", required=True, min_length=1, max_length=100)
+    item_count = TextInput(label="How many of those items will you donate?", placeholder="e.g., 5", required=True, max_length=10)
+    minimum_bid = TextInput(label="What should the minimum bid be?", placeholder="e.g., 1,000,000", required=False)
+    message = TextInput(label="What is your message?", placeholder="e.g., I love DR!", required=False, max_length=200)
 
-        async def on_submit(self, interaction: discord.Interaction):
-            """Handle the form submission."""
+    async def on_submit(self, interaction: discord.Interaction):
+        """Handle the form submission."""
+        try:
+            logging.info(f"Auction modal submitted by {interaction.user.name}")
+            item_name = self.item_name.value
+            item_count = self.item_count.value
+            min_bid = self.minimum_bid.value or "1,000,000"
+            message = self.message.value
+
+            logging.info(f"Submitted values: item={item_name}, count={item_count}, min_bid={min_bid}")
+
+            # Validate input
             try:
-                item_name = self.item_name.value
-                item_count = int(self.item_count.value)
-                item_value, total_value, tax = await self.cog.api_check(interaction, item_count, item_name)
-                
-                if not item_value:
-                    return
+                item_count = int(item_count)
+                if item_count <= 0:
+                    raise ValueError("Item count must be positive")
+            except ValueError as e:
+                await self.cog.safe_send(interaction, f"Invalid item count: {e}", ephemeral=True)
+                return
 
-                guild = interaction.guild
-                overwrites = {
-                    guild.default_role: discord.PermissionOverwrite(read_messages=False),
-                    interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-                    self.cog.bot.user: discord.PermissionOverwrite(read_messages=True),
-                }
-                
-                ticket_channel = await guild.create_text_channel(f"auction-{interaction.user.name}", overwrites=overwrites)
-                
-                auction_id = await self.cog.get_next_auction_id(guild)
+            # Check item value
+            item_value, total_value, tax = await self.cog.api_check(interaction, item_count, item_name)
+            if not item_value:
+                return  # api_check will have sent an error message
 
-                auction_data = {
-                    "auction_id": auction_id,
-                    "user_id": interaction.user.id,
-                    "item": item_name,
-                    "amount": item_count,
-                    "min_bid": self.minimum_bid.value or "1,000,000",
-                    "message": self.message.value,
-                    "status": "pending",
-                    "ticket_channel_id": ticket_channel.id,
-                    "start_time": int(time.time()),
-                    "end_time": int(time.time()) + 21600,  # 6 hours
-                    "item_value": item_value,
-                    "total_value": total_value,
-                    "tax": tax,
-                    "donated_amount": 0,
-                    "donated_tax": 0
-                }
+            guild = interaction.guild
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                interaction.user: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+                self.cog.bot.user: discord.PermissionOverwrite(read_messages=True),
+            }
+            
+            ticket_channel = await guild.create_text_channel(f"auction-{interaction.user.name}", overwrites=overwrites)
+            
+            auction_id = await self.cog.get_next_auction_id(guild)
 
-                async with self.cog.config.guild(guild).auctions() as auctions:
-                    auctions[auction_id] = auction_data
+            auction_data = {
+                "auction_id": auction_id,
+                "user_id": interaction.user.id,
+                "item": item_name,
+                "amount": item_count,
+                "min_bid": min_bid,
+                "message": message,
+                "status": "pending",
+                "ticket_channel_id": ticket_channel.id,
+                "start_time": int(time.time()),
+                "end_time": int(time.time()) + 21600,  # 6 hours
+                "item_value": item_value,
+                "total_value": total_value,
+                "tax": tax,
+                "donated_amount": 0,
+                "donated_tax": 0
+            }
 
-                embed = discord.Embed(
-                    title="Your Auction Details",
-                    description=f"Please donate {item_count} of {item_name} as you have mentioned in the modal or you will get blacklisted.",
-                    color=discord.Color.blue()
-                )
-                embed.add_field(name="Item", value=f"{item_count}x {item_name}", inline=False)
-                embed.add_field(name="Minimum Bid", value=self.minimum_bid.value or "1,000,000", inline=True)
-                embed.add_field(name="Market Price (each)", value=f"{item_value:,}", inline=True)
-                embed.add_field(name="Total Value", value=f"{total_value:,}", inline=True)
-                embed.add_field(name="Tax (10%)", value=f"{tax:,}", inline=True)
-                embed.add_field(name="Channel closes in", value="6 hours", inline=True)
-                embed.set_footer(text="This channel will be deleted after 6 hours.")
+            async with self.cog.config.guild(guild).auctions() as auctions:
+                auctions[auction_id] = auction_data
 
-                view = self.cog.AuctionControlView(self.cog, auction_id)
-                await ticket_channel.send(content=interaction.user.mention, embed=embed, view=view)
+            embed = discord.Embed(
+                title="Your Auction Details",
+                description=f"Please donate {item_count} of {item_name} as you have mentioned in the modal or you will get blacklisted.",
+                color=discord.Color.blue()
+            )
+            embed.add_field(name="Item", value=f"{item_count}x {item_name}", inline=False)
+            embed.add_field(name="Minimum Bid", value=min_bid, inline=True)
+            embed.add_field(name="Market Price (each)", value=f"{item_value:,}", inline=True)
+            embed.add_field(name="Total Value", value=f"{total_value:,}", inline=True)
+            embed.add_field(name="Tax (10%)", value=f"{tax:,}", inline=True)
+            embed.add_field(name="Channel closes in", value="6 hours", inline=True)
+            embed.set_footer(text="This channel will be deleted after 6 hours.")
 
-                # Assign the auction role
-                auction_role_id = await self.cog.config.guild(guild).auction_role()
-                if auction_role_id:
-                    auction_role = guild.get_role(auction_role_id)
-                    if auction_role:
-                        await interaction.user.add_roles(auction_role)
+            view = self.cog.AuctionControlView(self.cog, auction_id)
+            await ticket_channel.send(content=interaction.user.mention, embed=embed, view=view)
 
-                await self.cog.safe_send(interaction, f"Auction channel created: {ticket_channel.mention}", ephemeral=True)
+            # Assign the auction role
+            auction_role_id = await self.cog.config.guild(guild).auction_role()
+            if auction_role_id:
+                auction_role = guild.get_role(auction_role_id)
+                if auction_role:
+                    await interaction.user.add_roles(auction_role)
 
-                # Schedule the auction end
-                self.cog.bot.loop.create_task(self.cog.schedule_auction_end(auction_id, 21600))  # 6 hours
+            await self.cog.safe_send(interaction, f"Auction channel created: {ticket_channel.mention}", ephemeral=True)
 
-            except Exception as e:
-                logging.error(f"An error occurred in modal submission: {e}")
-                await self.cog.safe_send(interaction, f"An error occurred while processing your submission: {str(e)}", ephemeral=True)
+            # Schedule the auction end
+            self.cog.bot.loop.create_task(self.cog.schedule_auction_end(auction_id, 21600))  # 6 hours
+
+        except Exception as e:
+            logging.error(f"An error occurred in modal submission: {e}", exc_info=True)
+            await self.cog.safe_send(interaction, f"An error occurred while processing your submission. Please try again or contact an administrator.", ephemeral=True)
 
     class AuctionControlView(View):
         def __init__(self, cog, auction_id):
