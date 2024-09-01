@@ -108,7 +108,8 @@ class AdvancedAuction(commands.Cog):
     async def get_next_auction_id(self, guild: discord.Guild):
         """Generate the next auction ID."""
         auctions = await self.config.guild(guild).auctions()
-        return str(max(map(int, auctions.keys()), default=0) + 1)
+        next_id = str(max(map(int, auctions.keys()), default=0) + 1)
+        return f"{guild.id}-{next_id}"
 
     class AuctionModal(Modal):
         def __init__(self, cog):
@@ -229,7 +230,7 @@ class AdvancedAuction(commands.Cog):
             return
 
         embed = message.embeds[0]
-        if embed.title != "Action Confirmed":
+        if "Successfully donated" not in embed.description:
             return
 
         guild = message.guild
@@ -244,9 +245,9 @@ class AdvancedAuction(commands.Cog):
         """Process a donation for an auction."""
         embed = message.embeds[0]
         description = embed.description
-        parts = description.split("**")
-        donated_amount = int(parts[1].split("<")[0])
-        donated_item = str(parts[1].split(">")[1])
+        parts = description.split()
+        donated_amount = int(parts[2])  # "Successfully donated 5"
+        donated_item = " ".join(parts[3:])  # "Pepe Trophy"
 
         if donated_item.lower() != auction["item"].lower():
             await message.channel.send("This item doesn't match the auction item. Please donate the correct item.")
@@ -299,7 +300,12 @@ class AdvancedAuction(commands.Cog):
 
     async def end_auction(self, auction_id):
         """End the auction and announce the winner."""
-        guild = self.bot.guilds[0]  # Assuming the bot is only in one guild
+        guild_id = auction_id.split('-')[0]
+        guild = self.bot.get_guild(int(guild_id))
+        if not guild:
+            logging.error(f"Could not find guild for auction {auction_id}")
+            return
+
         async with self.config.guild(guild).auctions() as auctions:
             auction = auctions.get(auction_id)
             if not auction or auction["status"] != "active":
@@ -312,7 +318,12 @@ class AdvancedAuction(commands.Cog):
 
     async def close_auction(self, interaction: Optional[discord.Interaction], auction_id: str, reason: str):
         """Close the auction channel and handle the aftermath."""
-        guild = self.bot.guilds[0] if not interaction else interaction.guild
+        guild_id = auction_id.split('-')[0]
+        guild = self.bot.get_guild(int(guild_id))
+        if not guild:
+            logging.error(f"Could not find guild for auction {auction_id}")
+            return
+
         async with self.config.guild(guild).auctions() as auctions:
             auction = auctions.get(auction_id)
             if not auction:
