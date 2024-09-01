@@ -111,6 +111,13 @@ class AdvancedAuction(commands.Cog):
         next_id = str(max(map(int, auctions.keys()), default=0) + 1)
         return f"{guild.id}-{next_id}"
 
+    async def get_next_auction_id(self, guild: discord.Guild):
+        """Generate the next auction ID."""
+        auctions = await self.config.guild(guild).auctions()
+        existing_ids = [int(aid.split('-')[1]) for aid in auctions.keys()]
+        next_id = max(existing_ids, default=0) + 1
+        return f"{guild.id}-{next_id}"
+
     class AuctionModal(Modal):
         def __init__(self, cog):
             self.cog = cog
@@ -151,8 +158,8 @@ class AdvancedAuction(commands.Cog):
                     "message": self.message.value,
                     "status": "pending",
                     "ticket_channel_id": ticket_channel.id,
-                    "start_time": time.time(),
-                    "end_time": time.time() + 21600,  # 6 hours
+                    "start_time": int(time.time()),
+                    "end_time": int(time.time()) + 21600,  # 6 hours
                     "item_value": item_value,
                     "total_value": total_value,
                     "tax": tax,
@@ -187,6 +194,13 @@ class AdvancedAuction(commands.Cog):
                         await interaction.user.add_roles(auction_role)
 
                 await self.cog.safe_send(interaction, f"Auction channel created: {ticket_channel.mention}", ephemeral=True)
+
+                # Schedule the auction end
+                self.cog.bot.loop.create_task(self.cog.schedule_auction_end(auction_id, 21600))  # 6 hours
+
+            except Exception as e:
+                logging.error(f"An error occurred in modal submission: {e}")
+                await self.cog.safe_send(interaction, f"An error occurred while processing your submission: {str(e)}", ephemeral=True)
 
                 # Schedule the auction end
                 self.cog.bot.loop.create_task(self.cog.schedule_auction_end(auction_id, 21600))  # 6 hours
