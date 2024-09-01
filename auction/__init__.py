@@ -1,5 +1,5 @@
-from .auction import Auction
+from .auction import AdvancedAuction
 
 async def setup(bot):
-    cog = Auction(bot)
+    cog = AdvancedAuction(bot)
     await bot.add_cog(cog)
