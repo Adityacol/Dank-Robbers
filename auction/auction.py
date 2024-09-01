@@ -264,8 +264,18 @@ class AdvancedAuction(commands.Cog):
         logging.info(f"Donation message parts: {parts}")
 
         try:
-            donated_amount = int(parts[2])  # "Successfully donated 5"
-            donated_item = " ".join(parts[3:])  # "Pepe Trophy"
+            # Find the donated amount and item name
+            donated_amount = None
+            donated_item = None
+            for i, part in enumerate(parts):
+                if part.isdigit():
+                    donated_amount = int(part)
+                    donated_item = " ".join(parts[i+1:])
+                    break
+
+            if donated_amount is None or donated_item is None:
+                raise ValueError("Could not parse donation amount or item")
+
             logging.info(f"Parsed donation: {donated_amount} {donated_item}")
 
             if donated_item.lower() != auction["item"].lower():
@@ -293,6 +303,7 @@ class AdvancedAuction(commands.Cog):
                 await message.channel.send(embed=embed)
 
             await self.config.guild(message.guild).auctions.set_raw(auction["auction_id"], value=auction)
+
         except Exception as e:
             logging.error(f"Error processing donation: {e}")
             await message.channel.send("An error occurred while processing the donation. Please contact an administrator.")
