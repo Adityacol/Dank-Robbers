@@ -226,52 +226,75 @@ class AdvancedAuction(commands.Cog):
         if message.author.id != 270904126974590976:  # Dank Memer bot ID
             return
 
+        logging.info(f"Received message from Dank Memer: {message.content}")
+
         if not message.embeds:
+            logging.info("No embeds in the message")
             return
 
         embed = message.embeds[0]
-        if "Successfully donated" not in embed.description:
+        logging.info(f"Embed title: {embed.title}")
+        logging.info(f"Embed description: {embed.description}")
+
+        if not embed.description or "Successfully donated" not in embed.description:
+            logging.info("Not a donation message")
             return
 
         guild = message.guild
         auctions = await self.config.guild(guild).auctions()
         
+        logging.info(f"Current auctions: {auctions}")
+        logging.info(f"Current channel ID: {message.channel.id}")
+
         for auction_id, auction in auctions.items():
+            logging.info(f"Checking auction {auction_id}: {auction}")
             if auction["ticket_channel_id"] == message.channel.id and auction["status"] == "pending":
+                logging.info(f"Found matching auction: {auction_id}")
                 await self.process_donation(message, auction)
                 break
+        else:
+            logging.info("No matching auction found")
 
     async def process_donation(self, message, auction):
         """Process a donation for an auction."""
         embed = message.embeds[0]
         description = embed.description
         parts = description.split()
-        donated_amount = int(parts[2])  # "Successfully donated 5"
-        donated_item = " ".join(parts[3:])  # "Pepe Trophy"
+        logging.info(f"Donation message parts: {parts}")
 
-        if donated_item.lower() != auction["item"].lower():
-            await message.channel.send("This item doesn't match the auction item. Please donate the correct item.")
-            return
+        try:
+            donated_amount = int(parts[2])  # "Successfully donated 5"
+            donated_item = " ".join(parts[3:])  # "Pepe Trophy"
+            logging.info(f"Parsed donation: {donated_amount} {donated_item}")
 
-        auction["donated_amount"] += donated_amount
-        remaining_amount = auction["amount"] - auction["donated_amount"]
-        remaining_tax = auction["tax"] - auction["donated_tax"]
+            if donated_item.lower() != auction["item"].lower():
+                await message.channel.send("This item doesn't match the auction item. Please donate the correct item.")
+                return
 
-        if remaining_amount <= 0 and remaining_tax <= 0:
-            await self.finalize_auction(message.guild, auction)
-        else:
-            embed = discord.Embed(
-                title="Donation Received",
-                description="Thank you for your donation. Here's what's left:",
-                color=discord.Color.green()
-            )
-            if remaining_amount > 0:
-                embed.add_field(name="Remaining Items", value=f"{remaining_amount}x {auction['item']}", inline=False)
-            if remaining_tax > 0:
-                embed.add_field(name="Remaining Tax", value=f"{remaining_tax:,}", inline=False)
-            await message.channel.send(embed=embed)
+            auction["donated_amount"] += donated_amount
+            remaining_amount = auction["amount"] - auction["donated_amount"]
+            remaining_tax = auction["tax"] - auction["donated_tax"]
 
-        await self.config.guild(message.guild).auctions.set_raw(auction["auction_id"], value=auction)
+            logging.info(f"Updated auction: {auction}")
+
+            if remaining_amount <= 0 and remaining_tax <= 0:
+                await self.finalize_auction(message.guild, auction)
+            else:
+                embed = discord.Embed(
+                    title="Donation Received",
+                    description="Thank you for your donation. Here's what's left:",
+                    color=discord.Color.green()
+                )
+                if remaining_amount > 0:
+                    embed.add_field(name="Remaining Items", value=f"{remaining_amount}x {auction['item']}", inline=False)
+                if remaining_tax > 0:
+                    embed.add_field(name="Remaining Tax", value=f"{remaining_tax:,}", inline=False)
+                await message.channel.send(embed=embed)
+
+            await self.config.guild(message.guild).auctions.set_raw(auction["auction_id"], value=auction)
+        except Exception as e:
+            logging.error(f"Error processing donation: {e}")
+            await message.channel.send("An error occurred while processing the donation. Please contact an administrator.")
 
     async def finalize_auction(self, guild, auction):
         """Finalize an auction after all items and tax have been donated."""
