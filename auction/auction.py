@@ -323,7 +323,7 @@ class AdvancedAuction(commands.Cog):
 
     async def end_auction(self, auction_id):
         """End the auction and announce the winner."""
-        guild_id = auction_id.split('-')[0]
+        guild_id, _ = auction_id.split('-')
         guild = self.bot.get_guild(int(guild_id))
         if not guild:
             logging.error(f"Could not find guild for auction {auction_id}")
@@ -341,7 +341,7 @@ class AdvancedAuction(commands.Cog):
 
     async def close_auction(self, interaction: Optional[discord.Interaction], auction_id: str, reason: str):
         """Close the auction channel and handle the aftermath."""
-        guild_id = auction_id.split('-')[0]
+        guild_id, _ = auction_id.split('-')
         guild = self.bot.get_guild(int(guild_id))
         if not guild:
             logging.error(f"Could not find guild for auction {auction_id}")
