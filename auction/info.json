@@ -1,0 +1,9 @@
+{
+    "author": ["YourName"],
+    "description": "An advanced auction system for Red-DiscordBot with Dank Memer integration",
+    "install_msg": "Thanks for installing the Advanced Auction cog!",
+    "short": "Advanced auction system",
+    "tags": ["auction", "economy", "dank memer"],
+    "type": "COG",
+    "end_user_data_statement": "This cog stores user IDs for active auctions and bids."
+}
