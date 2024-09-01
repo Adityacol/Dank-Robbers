@@ -1,4 +1,5 @@
 import discord
+from discord import app_commands
 from discord.ui import Modal, TextInput, View, Button
 from redbot.core import commands, Config
 from redbot.core.bot import Red
@@ -46,7 +47,7 @@ class AdvancedAuction(commands.Cog):
             try:
                 async with session.get("https://api.gwapes.com/items") as response:
                     if response.status != 200:
-                        await interaction.response.send_message("Error fetching item value from API. Please try again later.", ephemeral=True)
+                        await self.safe_send(interaction, "Error fetching item value from API. Please try again later.", ephemeral=True)
                         logging.error(f"API response status: {response.status}")
                         return False
                     
@@ -55,18 +56,18 @@ class AdvancedAuction(commands.Cog):
                     item_data = next((item for item in items if item["name"].strip().lower() == item_name.strip().lower()), None)
                     
                     if not item_data:
-                        await interaction.response.send_message("Item not found. Please enter a valid item name.", ephemeral=True)
+                        await self.safe_send(interaction, "Item not found. Please enter a valid item name.", ephemeral=True)
                         return False
                     
                     item_value = item_data.get("value", 0)
                     total_value = item_value * item_count
                     
-                    if total_value < 50000000:  # Changed to 50 million
-                        await interaction.response.send_message("The total donation value must be over 50 million.", ephemeral=True)
+                    if total_value < 50000000:  # 50 million
+                        await self.safe_send(interaction, "The total donation value must be over 50 million.", ephemeral=True)
                         return False
 
             except Exception as e:
-                await interaction.response.send_message(f"An error occurred while fetching item value: {str(e)}", ephemeral=True)
+                await self.safe_send(interaction, f"An error occurred while fetching item value: {str(e)}", ephemeral=True)
                 logging.error(f"Exception in API check: {e}")
                 return False
         return True
@@ -105,7 +106,7 @@ class AdvancedAuction(commands.Cog):
                 
                 ticket_channel = await guild.create_text_channel(f"ticket-{interaction.user.name}", overwrites=overwrites)
                 await ticket_channel.send(f"{interaction.user.mention}, please donate {item_count} of {item_name} as you have mentioned in the modal or you will get blacklisted.")
-                await interaction.response.send_message("Auction details submitted! Please donate the items within 30 minutes.", ephemeral=True)
+                await self.cog.safe_send(interaction, "Auction details submitted! Please donate the items within 30 minutes.", ephemeral=True)
 
                 auction_id = self.cog.get_next_auction_id(guild)
 
@@ -150,7 +151,7 @@ class AdvancedAuction(commands.Cog):
 
             except Exception as e:
                 logging.error(f"An error occurred in modal submission: {e}")
-                await interaction.response.send_message(f"An error occurred while processing your submission: {str(e)}", ephemeral=True)
+                await self.cog.safe_send(interaction, f"An error occurred while processing your submission: {str(e)}", ephemeral=True)
 
     class TicketView(View):
         def __init__(self, channel):
@@ -175,7 +176,7 @@ class AdvancedAuction(commands.Cog):
                 await interaction.response.send_modal(modal)
             except Exception as e:
                 logging.error(f"An error occurred while sending the modal: {e}")
-                await interaction.response.send_message(f"An error occurred while sending the modal: {str(e)}", ephemeral=True)
+                await self.cog.safe_send(interaction, f"An error occurred while sending the modal: {str(e)}", ephemeral=True)
 
     @commands.command()
     async def requestauction(self, ctx: commands.Context):
@@ -308,6 +309,9 @@ class AdvancedAuction(commands.Cog):
                     color=discord.Color.red()
                 )
                 await log_channel.send(embed=embed)
+
+        # Remove the auction from the queue channel
+        await self.remove_queue_auction(guild, auction["auction_id"])
 
     @commands.command()
     async def bid(self, ctx: commands.Context, auction_id: str, amount: str):
@@ -465,6 +469,18 @@ class AdvancedAuction(commands.Cog):
             embed.add_field(name="Highest Bid", value="No bids yet", inline=False)
 
         await ctx.send(embed=embed)
+
+    async def safe_send(self, interaction: discord.Interaction, content: str, **kwargs):
+        """Safely send a response to an interaction, handling unknown interaction errors."""
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(content, **kwargs)
+            else:
+                await interaction.response.send_message(content, **kwargs)
+        except discord.errors.NotFound:
+            logging.warning(f"Attempted to respond to an unknown interaction: {interaction.id}")
+        except Exception as e:
+            logging.error(f"Error in safe_send: {e}")
 
 async def setup(bot: Red):
     await bot.add_cog(AdvancedAuction(bot))
