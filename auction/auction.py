@@ -527,7 +527,7 @@ class AdvancedAuction(commands.Cog):
         reactions = message.reactions
         check_count = next((r.count for r in reactions if str(r.emoji) == "✅"), 0) - 1  # Subtract 1 to exclude the bot's reaction
 
-        if check_count >= 5:
+        if check_count >= 2:
             await self.run_auction(guild, auction_id)
         else:
             await queue_channel.send("Not enough interest. Auction cancelled.")
