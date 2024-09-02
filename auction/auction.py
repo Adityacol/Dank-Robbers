@@ -108,7 +108,20 @@ class AdvancedAuction(commands.Cog):
     async def get_next_auction_id(self, guild: discord.Guild):
         """Generate the next auction ID."""
         auctions = await self.config.guild(guild).auctions()
-        existing_ids = [int(aid.split('-')[1]) for aid in auctions.keys()]
+        existing_ids = []
+        for aid in auctions.keys():
+            try:
+                # Try to split the auction ID and get the number part
+                parts = aid.split('-')
+                if len(parts) > 1 and parts[-1].isdigit():
+                    existing_ids.append(int(parts[-1]))
+                else:
+                    # If the format is not as expected, log it but don't raise an error
+                    log.warning(f"Unexpected auction ID format: {aid}")
+            except Exception as e:
+                log.error(f"Error parsing auction ID {aid}: {e}")
+        
+        # If we found any valid IDs, use the max + 1, otherwise start from 1
         next_id = max(existing_ids, default=0) + 1
         return f"{guild.id}-{next_id}"
 
