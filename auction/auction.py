@@ -108,22 +108,9 @@ class AdvancedAuction(commands.Cog):
     async def get_next_auction_id(self, guild: discord.Guild):
         """Generate the next auction ID."""
         auctions = await self.config.guild(guild).auctions()
-        existing_ids = []
-        for aid in auctions.keys():
-            try:
-                # Try to convert the entire aid to an integer
-                existing_ids.append(int(aid))
-            except ValueError:
-                # If it's not a plain integer, try to split and get the last part
-                parts = aid.split('-')
-                if parts[-1].isdigit():
-                    existing_ids.append(int(parts[-1]))
-                else:
-                    log.warning(f"Unexpected auction ID format: {aid}")
-
-        # If we found any valid IDs, use the max + 1, otherwise start from 1
+        existing_ids = [int(aid.split('-')[1]) for aid in auctions.keys() if '-' in aid]
         next_id = max(existing_ids, default=0) + 1
-        return str(next_id)  # Return as string to be consistent with how it's stored
+        return f"{guild.id}-{next_id}"
 
     class AuctionModal(Modal):
         def __init__(self, cog):
@@ -185,6 +172,7 @@ class AdvancedAuction(commands.Cog):
 
                 auction_data = {
                     "auction_id": auction_id,
+                    "guild_id": guild.id,
                     "user_id": interaction.user.id,
                     "item": item_name,
                     "amount": item_count,
@@ -375,7 +363,8 @@ class AdvancedAuction(commands.Cog):
 
     async def end_auction(self, auction_id):
         """End the auction and announce the winner."""
-        guild = self.bot.get_guild(int(auction_id.split('-')[0]))
+        guild_id, _ = auction_id.split('-')
+        guild = self.bot.get_guild(int(guild_id))
         if not guild:
             log.error(f"Could not find guild for auction {auction_id}")
             return
@@ -392,7 +381,8 @@ class AdvancedAuction(commands.Cog):
 
     async def close_auction(self, interaction: Optional[discord.Interaction], auction_id: str, reason: str):
         """Close the auction channel and handle the aftermath."""
-        guild = self.bot.get_guild(int(auction_id.split('-')[0]))
+        guild_id, _ = auction_id.split('-')
+        guild = self.bot.get_guild(int(guild_id))
         if not guild:
             log.error(f"Could not find guild for auction {auction_id}")
             return
