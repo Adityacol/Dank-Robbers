@@ -447,7 +447,7 @@ class AdvancedAuction(commands.Cog):
                reactions = message.reactions
                check_count = next((r.count for r in reactions if str(r.emoji) == "✅"), 0) - 1  # Subtract 1 to exclude the bot's reaction
 
-               if check_count >= 5:
+               if check_count >= 3:
                    await self.start_bidding(guild, auction)
                    return
 
