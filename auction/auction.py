@@ -94,7 +94,7 @@ class AdvancedAuction(commands.Cog):
                     total_value = item_value * item_count
                     tax = total_value * 0.10  # 10% tax
                     
-                    if total_value < 50000000:  # 50 million
+                    if total_value < 5000000:  # 50 million
                         await interaction.followup.send("The total donation value must be over 50 million.", ephemeral=True)
                         return None, None, None
 
