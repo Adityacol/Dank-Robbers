@@ -310,17 +310,19 @@ class AdvancedAuction(commands.Cog):
            if len(parts) < 3:
                raise ValueError("Unexpected donation message format")
 
-           donation_info = parts[1].split()
+           donation_info = parts[1].strip().split(' ', 1)
         
            # Check if it's a currency donation (tax payment)
            if '⏣' in donation_info[0]:
-               donated_amount = int(''.join(filter(str.isdigit, donation_info[0])))
+               # Remove currency symbol and commas, then convert to int
+               donated_amount = int(donation_info[0].replace('⏣', '').replace(',', ''))
                is_tax_payment = True
            else:
-               donated_amount = int(donation_info[0])
+               # Remove commas and convert to int
+               donated_amount = int(donation_info[0].replace(',', ''))
                is_tax_payment = False
 
-           donated_item = ' '.join(donation_info[1:]) if not is_tax_payment else "Tax Payment"
+           donated_item = donation_info[1] if len(donation_info) > 1 and not is_tax_payment else "Tax Payment"
 
            log.info(f"Parsed donation: {donated_amount} {donated_item}")
 
@@ -345,6 +347,10 @@ class AdvancedAuction(commands.Cog):
 
            log.info(f"Updated auction: {auction}")
 
+           if remaining_tax < 0:
+               await message.channel.send("The tax payment exceeds the required amount. Please contact an administrator.")
+               return
+
            if remaining_amount <= 0 and remaining_tax <= 0:
                await self.finalize_auction(message.guild, auction)
            else:
@@ -360,7 +366,7 @@ class AdvancedAuction(commands.Cog):
                await message.channel.send(embed=embed)
 
            await self.config.guild(message.guild).auctions.set_raw(auction["auction_id"], value=auction)
-
+ 
        except Exception as e:
            log.error(f"Error processing donation: {e}", exc_info=True)
            await message.channel.send("An error occurred while processing the donation. Please contact an administrator.")
