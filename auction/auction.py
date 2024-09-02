@@ -7,9 +7,9 @@ import aiohttp
 import asyncio
 import time
 import logging
-from typing import Optional
+from typing import Optional, Dict, Any
 
-logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("red.economy.AdvancedAuction")
 
 class AdvancedAuction(commands.Cog):
     """An advanced cog to handle auctions with bidding, donations, and Dank Memer integration."""
@@ -17,7 +17,7 @@ class AdvancedAuction(commands.Cog):
     def __init__(self, bot: Red):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=1234567890, force_registration=True)
-        default_guild = {
+        default_guild: Dict[str, Any] = {
             "auctions": {},
             "bids": {},
             "auction_channel": None,
@@ -79,7 +79,7 @@ class AdvancedAuction(commands.Cog):
                 async with session.get("https://api.gwapes.com/items") as response:
                     if response.status != 200:
                         await self.safe_send(interaction, "Error fetching item value from API. Please try again later.", ephemeral=True)
-                        logging.error(f"API response status: {response.status}")
+                        log.error(f"API response status: {response.status}")
                         return None, None, None
                     
                     data = await response.json()
@@ -102,7 +102,7 @@ class AdvancedAuction(commands.Cog):
 
             except Exception as e:
                 await self.safe_send(interaction, f"An error occurred while fetching item value: {str(e)}", ephemeral=True)
-                logging.error(f"Exception in API check: {e}")
+                log.error(f"Exception in API check: {e}")
                 return None, None, None
 
     async def get_next_auction_id(self, guild: discord.Guild):
@@ -125,13 +125,13 @@ class AdvancedAuction(commands.Cog):
         async def on_submit(self, interaction: discord.Interaction):
             """Handle the form submission."""
             try:
-                logging.info(f"Auction modal submitted by {interaction.user.name}")
+                log.info(f"Auction modal submitted by {interaction.user.name}")
                 item_name = self.item_name.value
                 item_count = self.item_count.value
                 min_bid = self.minimum_bid.value or "1,000,000"
                 message = self.message.value
 
-                logging.info(f"Submitted values: item={item_name}, count={item_count}, min_bid={min_bid}")
+                log.info(f"Submitted values: item={item_name}, count={item_count}, min_bid={min_bid}")
 
                 # Validate input
                 try:
@@ -208,7 +208,7 @@ class AdvancedAuction(commands.Cog):
                 self.cog.bot.loop.create_task(self.cog.schedule_auction_end(auction_id, 21600))  # 6 hours
 
             except Exception as e:
-                logging.error(f"An error occurred in modal submission: {e}", exc_info=True)
+                log.error(f"An error occurred in modal submission: {e}", exc_info=True)
                 await self.cog.safe_send(interaction, f"An error occurred while processing your submission. Please try again or contact an administrator.", ephemeral=True)
 
     class AuctionControlView(View):
@@ -233,7 +233,7 @@ class AdvancedAuction(commands.Cog):
                 modal = self.cog.AuctionModal(self.cog)
                 await interaction.response.send_modal(modal)
             except Exception as e:
-                logging.error(f"An error occurred while sending the modal: {e}")
+                log.error(f"An error occurred while sending the modal: {e}")
                 await self.cog.safe_send(interaction, f"An error occurred while sending the modal: {str(e)}", ephemeral=True)
 
     @commands.Cog.listener()
@@ -242,41 +242,41 @@ class AdvancedAuction(commands.Cog):
         if message.author.id != 270904126974590976:  # Dank Memer bot ID
             return
 
-        logging.info(f"Received message from Dank Memer: {message.content}")
+        log.info(f"Received message from Dank Memer: {message.content}")
 
         if not message.embeds:
-            logging.info("No embeds in the message")
+            log.info("No embeds in the message")
             return
 
         embed = message.embeds[0]
-        logging.info(f"Embed title: {embed.title}")
-        logging.info(f"Embed description: {embed.description}")
+        log.info(f"Embed title: {embed.title}")
+        log.info(f"Embed description: {embed.description}")
 
         if not embed.description or "Successfully donated" not in embed.description:
-            logging.info("Not a donation message")
+            log.info("Not a donation message")
             return
 
         guild = message.guild
         auctions = await self.config.guild(guild).auctions()
         
-        logging.info(f"Current auctions: {auctions}")
-        logging.info(f"Current channel ID: {message.channel.id}")
+        log.info(f"Current auctions: {auctions}")
+        log.info(f"Current channel ID: {message.channel.id}")
 
         for auction_id, auction in auctions.items():
-            logging.info(f"Checking auction {auction_id}: {auction}")
+            log.info(f"Checking auction {auction_id}: {auction}")
             if auction["ticket_channel_id"] == message.channel.id and auction["status"] == "pending":
-                logging.info(f"Found matching auction: {auction_id}")
+                log.info(f"Found matching auction: {auction_id}")
                 await self.process_donation(message, auction)
                 break
         else:
-            logging.info("No matching auction found")
+            log.info("No matching auction found")
 
     async def process_donation(self, message, auction):
         """Process a donation for an auction."""
         embed = message.embeds[0]
         description = embed.description
         parts = description.split()
-        logging.info(f"Donation message parts: {parts}")
+        log.info(f"Donation message parts: {parts}")
 
         try:
             # Find the donated amount and item name
@@ -291,7 +291,7 @@ class AdvancedAuction(commands.Cog):
             if donated_amount is None or donated_item is None:
                 raise ValueError("Could not parse donation amount or item")
 
-            logging.info(f"Parsed donation: {donated_amount} {donated_item}")
+            log.info(f"Parsed donation: {donated_amount} {donated_item}")
 
             if donated_item.lower() != auction["item"].lower():
                 await message.channel.send("This item doesn't match the auction item. Please donate the correct item.")
@@ -301,7 +301,7 @@ class AdvancedAuction(commands.Cog):
             remaining_amount = auction["amount"] - auction["donated_amount"]
             remaining_tax = auction["tax"] - auction["donated_tax"]
 
-            logging.info(f"Updated auction: {auction}")
+            log.info(f"Updated auction: {auction}")
 
             if remaining_amount <= 0 and remaining_tax <= 0:
                 await self.finalize_auction(message.guild, auction)
@@ -320,7 +320,7 @@ class AdvancedAuction(commands.Cog):
             await self.config.guild(message.guild).auctions.set_raw(auction["auction_id"], value=auction)
 
         except Exception as e:
-            logging.error(f"Error processing donation: {e}")
+            log.error(f"Error processing donation: {e}", exc_info=True)
             await message.channel.send("An error occurred while processing the donation. Please contact an administrator.")
 
     async def finalize_auction(self, guild, auction):
@@ -353,7 +353,7 @@ class AdvancedAuction(commands.Cog):
         guild_id, _ = auction_id.split('-')
         guild = self.bot.get_guild(int(guild_id))
         if not guild:
-            logging.error(f"Could not find guild for auction {auction_id}")
+            log.error(f"Could not find guild for auction {auction_id}")
             return
 
         async with self.config.guild(guild).auctions() as auctions:
@@ -371,7 +371,7 @@ class AdvancedAuction(commands.Cog):
         guild_id, _ = auction_id.split('-')
         guild = self.bot.get_guild(int(guild_id))
         if not guild:
-            logging.error(f"Could not find guild for auction {auction_id}")
+            log.error(f"Could not find guild for auction {auction_id}")
             return
 
         async with self.config.guild(guild).auctions() as auctions:
@@ -600,9 +600,9 @@ class AdvancedAuction(commands.Cog):
             else:
                 await interaction.response.send_message(content, **kwargs)
         except discord.errors.NotFound:
-            logging.warning(f"Attempted to respond to an unknown interaction: {interaction.id}")
+            log.warning(f"Attempted to respond to an unknown interaction: {interaction.id}")
         except Exception as e:
-            logging.error(f"Error in safe_send: {e}")
+            log.error(f"Error in safe_send: {e}", exc_info=True)
 
     def cog_unload(self):
         """Clean up on cog unload."""
