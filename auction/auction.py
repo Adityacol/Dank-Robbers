@@ -307,22 +307,38 @@ class AdvancedAuction(commands.Cog):
        try:
            # Extract donation information
            parts = description.split("**")
+           log.info(f"Split parts: {parts}")
+        
            if len(parts) < 3:
                raise ValueError("Unexpected donation message format")
 
-           donation_info = parts[1].strip().split(' ', 1)
-        
-           # Check if it's a currency donation (tax payment)
-           if '⏣' in donation_info[0]:
-               # Remove currency symbol and commas, then convert to int
-               donated_amount = int(donation_info[0].replace('⏣', '').replace(',', ''))
-               is_tax_payment = True
-           else:
-               # Remove commas and convert to int
-               donated_amount = int(donation_info[0].replace(',', ''))
-               is_tax_payment = False
+           donation_info = parts[1].strip()
+           log.info(f"Donation info: {donation_info}")
 
-           donated_item = donation_info[1] if len(donation_info) > 1 and not is_tax_payment else "Tax Payment"
+           # Check if it's a currency donation (tax payment)
+           if '⏣' in donation_info:
+               # Remove currency symbol and commas, then convert to int
+               amount_str = ''.join(filter(str.isdigit, donation_info))
+               log.info(f"Parsed amount string: {amount_str}")
+            
+               if not amount_str:
+                   raise ValueError(f"Unable to parse amount from: {donation_info}")
+            
+               donated_amount = int(amount_str)
+               is_tax_payment = True
+               donated_item = "Tax Payment"
+           else:
+               # Split the donation info into amount and item
+               amount_and_item = donation_info.split(' ', 1)
+               log.info(f"Amount and item split: {amount_and_item}")
+            
+               if len(amount_and_item) < 2:
+                   raise ValueError(f"Unable to split amount and item from: {donation_info}")
+            
+               amount_str = amount_and_item[0].replace(',', '')
+               donated_amount = int(amount_str)
+               donated_item = amount_and_item[1]
+               is_tax_payment = False
 
            log.info(f"Parsed donation: {donated_amount} {donated_item}")
 
@@ -366,10 +382,10 @@ class AdvancedAuction(commands.Cog):
                await message.channel.send(embed=embed)
 
            await self.config.guild(message.guild).auctions.set_raw(auction["auction_id"], value=auction)
- 
+
        except Exception as e:
            log.error(f"Error processing donation: {e}", exc_info=True)
-           await message.channel.send("An error occurred while processing the donation. Please contact an administrator.")
+           await message.channel.send(f"An error occurred while processing the donation: {str(e)}. Please contact an administrator.")
 
     async def finalize_auction(self, guild, auction):
         """Finalize an auction after all items and tax have been donated."""
