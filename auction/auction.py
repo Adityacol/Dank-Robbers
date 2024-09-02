@@ -265,10 +265,24 @@ class AdvancedAuction(commands.Cog):
         log.info(f"Embed title: {embed.title}")
         log.info(f"Embed description: {embed.description}")
 
-        if not embed.description or "Successfully donated" not in embed.description:
-            log.info("Not a donation message")
-            return
+        if embed.title == "Pending Confirmation":
+            # This is a confirmation message, we'll wait for it to be edited
+            def check(before, after):
+                return before.id == message.id and after.embeds and "Successfully donated" in after.embeds[0].description
 
+            try:
+                _, edited_message = await self.bot.wait_for('message_edit', check=check, timeout=30.0)
+                await self.handle_donation(edited_message)
+            except asyncio.TimeoutError:
+                log.info("Donation confirmation timed out")
+        elif "Successfully donated" in embed.description:
+            # This is already a successful donation message
+            await self.handle_donation(message)
+        else:
+            log.info("Not a donation message")
+
+    async def handle_donation(self, message):
+        """Handle a successful donation message."""
         guild = message.guild
         auctions = await self.config.guild(guild).auctions()
         
@@ -288,21 +302,16 @@ class AdvancedAuction(commands.Cog):
         """Process a donation for an auction."""
         embed = message.embeds[0]
         description = embed.description
-        parts = description.split()
-        log.info(f"Donation message parts: {parts}")
+        log.info(f"Processing donation: {description}")
 
         try:
-            # Find the donated amount and item name
-            donated_amount = None
-            donated_item = None
-            for i, part in enumerate(parts):
-                if part.isdigit():
-                    donated_amount = int(part)
-                    donated_item = " ".join(parts[i+1:])
-                    break
+            # Extract donation information
+            parts = description.split("**")
+            if len(parts) < 3:
+                raise ValueError("Unexpected donation message format")
 
-            if donated_amount is None or donated_item is None:
-                raise ValueError("Could not parse donation amount or item")
+            donated_amount = int(parts[1].split()[0])
+            donated_item = " ".join(parts[1].split()[1:])
 
             log.info(f"Parsed donation: {donated_amount} {donated_item}")
 
