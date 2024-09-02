@@ -442,7 +442,7 @@ class AdvancedAuction(commands.Cog):
                 return str(reaction.emoji) == "✅" and reaction.message.id == message.id and not user.bot
 
             try:
-                await self.bot.wait_for('reaction_add', timeout=60.0, check=reaction_check)
+                await self.bot.wait_for('reaction_add', timeout=350.0, check=reaction_check)
             except asyncio.TimeoutError:
                 await queue_channel.send("Not enough interest. Auction cancelled.")
                 return
