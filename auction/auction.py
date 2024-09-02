@@ -78,7 +78,7 @@ class AdvancedAuction(commands.Cog):
             try:
                 async with session.get("https://api.gwapes.com/items") as response:
                     if response.status != 200:
-                        await self.safe_send(interaction, "Error fetching item value from API. Please try again later.", ephemeral=True)
+                        await interaction.followup.send("Error fetching item value from API. Please try again later.", ephemeral=True)
                         log.error(f"API response status: {response.status}")
                         return None, None, None
                     
@@ -87,7 +87,7 @@ class AdvancedAuction(commands.Cog):
                     item_data = next((item for item in items if item["name"].strip().lower() == item_name.strip().lower()), None)
                     
                     if not item_data:
-                        await self.safe_send(interaction, "Item not found. Please enter a valid item name.", ephemeral=True)
+                        await interaction.followup.send("Item not found. Please enter a valid item name.", ephemeral=True)
                         return None, None, None
                     
                     item_value = item_data.get("value", 0)
@@ -95,13 +95,13 @@ class AdvancedAuction(commands.Cog):
                     tax = total_value * 0.10  # 10% tax
                     
                     if total_value < 50000000:  # 50 million
-                        await self.safe_send(interaction, "The total donation value must be over 50 million.", ephemeral=True)
+                        await interaction.followup.send("The total donation value must be over 50 million.", ephemeral=True)
                         return None, None, None
 
                     return item_value, total_value, tax
 
             except Exception as e:
-                await self.safe_send(interaction, f"An error occurred while fetching item value: {str(e)}", ephemeral=True)
+                await interaction.followup.send(f"An error occurred while fetching item value: {str(e)}", ephemeral=True)
                 log.error(f"Exception in API check: {e}")
                 return None, None, None
 
@@ -111,19 +111,19 @@ class AdvancedAuction(commands.Cog):
         existing_ids = []
         for aid in auctions.keys():
             try:
-                # Try to split the auction ID and get the number part
+                # Try to convert the entire aid to an integer
+                existing_ids.append(int(aid))
+            except ValueError:
+                # If it's not a plain integer, try to split and get the last part
                 parts = aid.split('-')
-                if len(parts) > 1 and parts[-1].isdigit():
+                if parts[-1].isdigit():
                     existing_ids.append(int(parts[-1]))
                 else:
-                    # If the format is not as expected, log it but don't raise an error
                     log.warning(f"Unexpected auction ID format: {aid}")
-            except Exception as e:
-                log.error(f"Error parsing auction ID {aid}: {e}")
-        
+
         # If we found any valid IDs, use the max + 1, otherwise start from 1
         next_id = max(existing_ids, default=0) + 1
-        return f"{guild.id}-{next_id}"
+        return str(next_id)  # Return as string to be consistent with how it's stored
 
     class AuctionModal(Modal):
         def __init__(self, cog):
@@ -146,13 +146,25 @@ class AdvancedAuction(commands.Cog):
 
                 log.info(f"Submitted values: item={item_name}, count={item_count}, min_bid={min_bid}")
 
+                # Respond immediately to close the modal
+                await interaction.response.send_message("Processing your auction request...", ephemeral=True)
+
+                # Start a task to process the auction
+                self.cog.bot.loop.create_task(self.process_auction(interaction, item_name, item_count, min_bid, message))
+
+            except Exception as e:
+                log.error(f"An error occurred in modal submission: {e}", exc_info=True)
+                await interaction.followup.send(f"An error occurred while processing your submission. Please try again or contact an administrator.", ephemeral=True)
+
+        async def process_auction(self, interaction: discord.Interaction, item_name: str, item_count: str, min_bid: str, message: str):
+            try:
                 # Validate input
                 try:
                     item_count = int(item_count)
                     if item_count <= 0:
                         raise ValueError("Item count must be positive")
                 except ValueError as e:
-                    await self.cog.safe_send(interaction, f"Invalid item count: {e}", ephemeral=True)
+                    await interaction.followup.send(f"Invalid item count: {e}", ephemeral=True)
                     return
 
                 # Check item value
@@ -215,14 +227,14 @@ class AdvancedAuction(commands.Cog):
                     if auction_role:
                         await interaction.user.add_roles(auction_role)
 
-                await self.cog.safe_send(interaction, f"Auction channel created: {ticket_channel.mention}", ephemeral=True)
+                await interaction.followup.send(f"Auction channel created: {ticket_channel.mention}", ephemeral=True)
 
                 # Schedule the auction end
                 self.cog.bot.loop.create_task(self.cog.schedule_auction_end(auction_id, 21600))  # 6 hours
 
             except Exception as e:
-                log.error(f"An error occurred in modal submission: {e}", exc_info=True)
-                await self.cog.safe_send(interaction, f"An error occurred while processing your submission. Please try again or contact an administrator.", ephemeral=True)
+                log.error(f"An error occurred while processing the auction: {e}", exc_info=True)
+                await interaction.followup.send(f"An error occurred while creating your auction. Please try again or contact an administrator.", ephemeral=True)
 
     class AuctionControlView(View):
         def __init__(self, cog, auction_id):
@@ -247,7 +259,7 @@ class AdvancedAuction(commands.Cog):
                 await interaction.response.send_modal(modal)
             except Exception as e:
                 log.error(f"An error occurred while sending the modal: {e}")
-                await self.cog.safe_send(interaction, f"An error occurred while sending the modal: {str(e)}", ephemeral=True)
+                await interaction.followup.send(f"An error occurred while sending the modal: {str(e)}", ephemeral=True)
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -363,8 +375,7 @@ class AdvancedAuction(commands.Cog):
 
     async def end_auction(self, auction_id):
         """End the auction and announce the winner."""
-        guild_id, _ = auction_id.split('-')
-        guild = self.bot.get_guild(int(guild_id))
+        guild = self.bot.get_guild(int(auction_id.split('-')[0]))
         if not guild:
             log.error(f"Could not find guild for auction {auction_id}")
             return
@@ -381,8 +392,7 @@ class AdvancedAuction(commands.Cog):
 
     async def close_auction(self, interaction: Optional[discord.Interaction], auction_id: str, reason: str):
         """Close the auction channel and handle the aftermath."""
-        guild_id, _ = auction_id.split('-')
-        guild = self.bot.get_guild(int(guild_id))
+        guild = self.bot.get_guild(int(auction_id.split('-')[0]))
         if not guild:
             log.error(f"Could not find guild for auction {auction_id}")
             return
@@ -431,7 +441,7 @@ class AdvancedAuction(commands.Cog):
             await self.remove_queue_auction(guild, auction_id)
 
         if interaction:
-            await self.safe_send(interaction, "Auction has been closed.", ephemeral=True)
+            await interaction.followup.send("Auction has been closed.", ephemeral=True)
 
     async def handle_auction_winner(self, guild: discord.Guild, auction: dict):
         """Handle the winner of an ended auction."""
@@ -604,18 +614,6 @@ class AdvancedAuction(commands.Cog):
             embed.add_field(name="Highest Bid", value="No bids yet", inline=False)
 
         await ctx.send(embed=embed)
-
-    async def safe_send(self, interaction: discord.Interaction, content: str, **kwargs):
-        """Safely send a response to an interaction, handling unknown interaction errors."""
-        try:
-            if interaction.response.is_done():
-                await interaction.followup.send(content, **kwargs)
-            else:
-                await interaction.response.send_message(content, **kwargs)
-        except discord.errors.NotFound:
-            log.warning(f"Attempted to respond to an unknown interaction: {interaction.id}")
-        except Exception as e:
-            log.error(f"Error in safe_send: {e}", exc_info=True)
 
     def cog_unload(self):
         """Clean up on cog unload."""
