@@ -308,26 +308,40 @@ class AdvancedAuction(commands.Cog):
            # Extract donation information
            parts = description.split("**")
            if len(parts) < 3:
-            raise ValueError("Unexpected donation message format")
+               raise ValueError("Unexpected donation message format")
 
-           donated_amount = int(parts[1].split()[0])
-           donated_item = " ".join(parts[1].split()[1:])
+           donation_info = parts[1].split()
+        
+           # Check if it's a currency donation (tax payment)
+           if '⏣' in donation_info[0]:
+               donated_amount = int(''.join(filter(str.isdigit, donation_info[0])))
+               is_tax_payment = True
+           else:
+               donated_amount = int(donation_info[0])
+               is_tax_payment = False
+
+           donated_item = ' '.join(donation_info[1:]) if not is_tax_payment else "Tax Payment"
 
            log.info(f"Parsed donation: {donated_amount} {donated_item}")
 
-           # Clean up item names for comparison
-           cleaned_donated_item = ' '.join(word for word in donated_item.split() if not word.startswith('<') and not word.endswith('>')).lower()
-           cleaned_auction_item = auction["item"].lower()
+           if is_tax_payment:
+               auction["donated_tax"] += donated_amount
+               remaining_tax = auction["tax"] - auction["donated_tax"]
+               remaining_amount = auction["amount"] - auction["donated_amount"]
+           else:
+               # Clean up item names for comparison
+               cleaned_donated_item = ' '.join(word for word in donated_item.split() if not word.startswith('<') and not word.endswith('>')).lower()
+               cleaned_auction_item = auction["item"].lower()
 
-           log.info(f"Cleaned item names - Donated: {cleaned_donated_item}, Auction: {cleaned_auction_item}")
+               log.info(f"Cleaned item names - Donated: {cleaned_donated_item}, Auction: {cleaned_auction_item}")
 
-           if cleaned_donated_item != cleaned_auction_item:
-               await message.channel.send(f"This item doesn't match the auction item. Expected {auction['item']}, but received {donated_item}.")
-               return
+               if cleaned_donated_item != cleaned_auction_item:
+                   await message.channel.send(f"This item doesn't match the auction item. Expected {auction['item']}, but received {donated_item}.")
+                   return
 
-           auction["donated_amount"] += donated_amount
-           remaining_amount = auction["amount"] - auction["donated_amount"]
-           remaining_tax = auction["tax"] - auction["donated_tax"]
+               auction["donated_amount"] += donated_amount
+               remaining_amount = auction["amount"] - auction["donated_amount"]
+               remaining_tax = auction["tax"] - auction["donated_tax"]
 
            log.info(f"Updated auction: {auction}")
 
@@ -342,7 +356,7 @@ class AdvancedAuction(commands.Cog):
                if remaining_amount > 0:
                    embed.add_field(name="Remaining Items", value=f"{remaining_amount}x {auction['item']}", inline=False)
                if remaining_tax > 0:
-                   embed.add_field(name="Remaining Tax", value=f"{remaining_tax:,}", inline=False)
+                   embed.add_field(name="Remaining Tax", value=f"⏣ {remaining_tax:,}", inline=False)
                await message.channel.send(embed=embed)
 
            await self.config.guild(message.guild).auctions.set_raw(auction["auction_id"], value=auction)
