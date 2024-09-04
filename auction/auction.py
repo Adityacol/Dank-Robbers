@@ -560,46 +560,82 @@ class AdvancedAuction(commands.Cog):
             )
             await queue_channel.send(embed=embed)
 
-            await asyncio.sleep(10)  # Wait for 10 seconds before next update
+            try:
+                message = await self.bot.wait_for(
+                    'message',
+                    check=lambda m: m.channel == queue_channel and self.is_valid_bid(m, auction['current_bid']),
+                    timeout=30.0
+                )
+                
+                new_bid = self.parse_bid_amount(message.content)
+                auction['current_bid'] = new_bid
+                auction['current_bidder'] = message.author.id
+                auction['end_time'] = int(time.time()) + 60  # Extend by 1 minute
+
+                await self.config.guild(guild).auctions.set_raw(auction_id, value=auction)
+                await queue_channel.send(f"Accepted bid of {new_bid:,} from {message.author.mention}")
+
+            except asyncio.TimeoutError:
+                # No new bids, start the countdown
+                for stage in ["Going Once", "Going Twice", "Final Call"]:
+                    await queue_channel.send(f"{stage} at {auction['current_bid']:,}")
+                    await asyncio.sleep(10)
+
+                if auction['current_bidder']:
+                    break
+                else:
+                    await queue_channel.send("No bids received. Auction cancelled.")
+                    await self.cancel_auction(guild, auction_id, "No bids received")
+                    return
 
         await self.end_auction(guild, auction_id)
+
+    def is_valid_bid(self, message, current_bid):
+        try:
+            bid_amount = self.parse_bid_amount(message.content)
+            return bid_amount > current_bid
+        except ValueError:
+            return False
 
     async def end_auction(self, guild, auction_id):
         """End the auction and handle the results."""
         auction = await self.config.guild(guild).auctions.get_raw(auction_id)
         queue_channel_id = await self.config.guild(guild).queue_channel()
         queue_channel = self.bot.get_channel(queue_channel_id)
-
-        if not queue_channel:
-            log.error(f"Queue channel not found for guild {guild.id}")
+        log_channel_id = await self.config.guild(guild).log_channel()
+        log_channel = self.bot.get_channel(log_channel_id)
+        if not queue_channel or not log_channel:
+            log.error(f"Required channels not found for guild {guild.id}")
             return
 
-        if auction['current_bidder']:
-            winner = guild.get_member(auction['current_bidder'])
-            winning_bid = auction['current_bid']
+        winner = guild.get_member(auction['current_bidder'])
+        winning_bid = auction['current_bid']
 
-            embed = discord.Embed(title="Auction Ended", color=discord.Color.gold())
-            embed.add_field(name="Winner", value=winner.mention if winner else "Unknown User", inline=False)
-            embed.add_field(name="Item", value=f"{auction['amount']}x {auction['item']}", inline=True)
-            embed.add_field(name="Winning Bid", value=f"{winning_bid:,}", inline=True)
-            await queue_channel.send(embed=embed)
+        embed = discord.Embed(title="Auction Ended", color=discord.Color.gold())
+        embed.add_field(name="Winner", value=winner.mention if winner else "Unknown User", inline=False)
+        embed.add_field(name="Item", value=f"{auction['amount']}x {auction['item']}", inline=True)
+        embed.add_field(name="Winning Bid", value=f"{winning_bid:,}", inline=True)
+        await queue_channel.send(embed=embed)
 
-            await queue_channel.send(f"{winner.mention}, send the money in this channel within 5 minutes!")
-            await queue_channel.send(f"/serverevents donate quantity:{winning_bid}")
+        await queue_channel.send(f"{winner.mention}, send the money in this channel within 3 minutes!")
+        await queue_channel.send(f"/serverevents donate quantity:{winning_bid}")
 
-            try:
-                await self.bot.wait_for(
-                    'message',
-                    check=lambda m: m.author.id == 270904126974590976 and "Successfully donated" in m.content,
-                    timeout=300.0
-                )
-                await queue_channel.send("Successfully donated!")
-                await queue_channel.send("Your items will be delivered to you shortly!")
-            except asyncio.TimeoutError:
-                await queue_channel.send("Payment not received in time. Auction cancelled.")
-                await self.handle_payment_failure(guild, auction, winner)
-        else:
-            await queue_channel.send("Auction ended with no bids.")
+        try:
+            await self.bot.wait_for(
+                'message',
+                check=lambda m: m.author.id == 270904126974590976 and "Successfully donated" in m.content,
+                timeout=180.0
+            )
+            await queue_channel.send("Successfully donated!")
+            await queue_channel.send("Your items will be delivered to you shortly!")
+            
+            # Log the payout commands
+            await log_channel.send(f"/serverevents payout user:{winner.id} quantity:{auction['amount']} item:{auction['item']}")
+            await log_channel.send(f"/serverevents payout user:{auction['user_id']} quantity:{winning_bid}")
+
+        except asyncio.TimeoutError:
+            await queue_channel.send("Payment not received in time. Auction cancelled.")
+            await self.handle_payment_failure(guild, auction, winner)
 
         # Remove the auction from the queue
         async with self.config.guild(guild).auction_queue() as queue:
@@ -635,7 +671,7 @@ class AdvancedAuction(commands.Cog):
         # Sort bids by amount in descending order
         sorted_bids = sorted(auction_bids, key=lambda x: x['amount'], reverse=True)
 
-        for bid in sorted_bids[1:4]:  # Try the next 3 highest bidders
+        for bid in sorted_bids[1:6]:  # Try the next 5 highest bidders
             bidder = guild.get_member(bid['user_id'])
             if not bidder:
                 continue
@@ -652,14 +688,6 @@ class AdvancedAuction(commands.Cog):
                 )
                 await queue_channel.send("Successfully donated!")
                 await queue_channel.send("Your items will be delivered to you shortly!")
-                
-                # Assign the auction role to the winning bidder
-                auction_role_id = await self.config.guild(guild).auction_role()
-                if auction_role_id:
-                    auction_role = guild.get_role(auction_role_id)
-                    if auction_role:
-                        await bidder.add_roles(auction_role)
-                
                 return
             except asyncio.TimeoutError:
                 await queue_channel.send(f"{bidder.mention} failed to pay in time.")
@@ -690,13 +718,30 @@ class AdvancedAuction(commands.Cog):
                 user = self.bot.get_user(auction['user_id'])
                 username = user.name if user else "Unknown User"
                 
+                time_ago = self.get_time_ago(auction['start_time'])
+                emoji_count = min(3, i)  # Limit to 3 emojis
+                emojis = "🔹" * emoji_count
+                
                 embed.add_field(
                     name=f"{i}. @{username}",
-                    value=f"{auction['amount']}x {auction['item']} - {auction['min_bid']} {auction.get('message', '')}",
+                    value=f"{auction['amount']}x {auction['item']} {time_ago} - {emojis} {auction.get('message', '')}",
                     inline=False
                 )
 
+            embed.add_field(name="Want To Skip The Queue FOR A WHOLE MONTH?", value="(buy the $3 one)\nbecome a patreon", inline=False)
+            embed.set_footer(text=f"{len(queue)} auctions in queue")
+
             await queue_channel.send(embed=embed)
+
+    def get_time_ago(self, start_time):
+        now = int(time.time())
+        diff = now - start_time
+        if diff < 3600:
+            return f"{diff // 60} minutes ago"
+        elif diff < 86400:
+            return f"{diff // 3600} hours ago"
+        else:
+            return f"{diff // 86400} days ago"
 
     @commands.command()
     @checks.admin_or_permissions(manage_guild=True)
@@ -731,6 +776,45 @@ class AdvancedAuction(commands.Cog):
 
         await ctx.send(f"Removed bid of {removed_bid['amount']:,} by {removed_bidder.mention if removed_bidder else 'Unknown User'}. "
                        f"New highest bid: {new_highest_bid['amount']:,} by {new_highest_bidder.mention if new_highest_bidder else 'Unknown User'}.")
+
+    async def cancel_auction(self, guild, auction_id, reason):
+        """Cancel an auction and remove it from the queue."""
+        async with self.config.guild(guild).auction_queue() as queue:
+            if auction_id in queue:
+                queue.remove(auction_id)
+
+        auction = await self.config.guild(guild).auctions.get_raw(auction_id)
+        auction['status'] = 'cancelled'
+        auction['cancel_reason'] = reason
+        await self.config.guild(guild).auctions.set_raw(auction_id, value=auction)
+
+        queue_channel_id = await self.config.guild(guild).queue_channel()
+        queue_channel = self.bot.get_channel(queue_channel_id)
+
+        if queue_channel:
+            await queue_channel.send(f"Auction {auction_id} has been cancelled. Reason: {reason}")
+
+    async def close_auction(self, interaction: discord.Interaction, auction_id: str, reason: str):
+        """Close an auction early."""
+        guild = interaction.guild
+        auction = await self.config.guild(guild).auctions.get_raw(auction_id)
+
+        if auction['status'] != 'pending':
+            await interaction.response.send_message("This auction cannot be closed at this time.", ephemeral=True)
+            return
+
+        await self.cancel_auction(guild, auction_id, reason)
+        await interaction.response.send_message("Auction has been closed.", ephemeral=True)
+
+    async def schedule_auction_end(self, auction_id: str, duration: int):
+        """Schedule the automatic end of an auction after the specified duration."""
+        await asyncio.sleep(duration)
+        guild_id, _ = auction_id.split('-')
+        guild = self.bot.get_guild(int(guild_id))
+        if guild:
+            auction = await self.config.guild(guild).auctions.get_raw(auction_id)
+            if auction['status'] == 'pending':
+                await self.cancel_auction(guild, auction_id, "Time limit reached")
 
     def cog_unload(self):
         """Clean up on cog unload."""
