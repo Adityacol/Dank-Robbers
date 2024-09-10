@@ -1124,7 +1124,7 @@ class AdvancedAuction(commands.Cog):
     async def auctionhelp(self, ctx: commands.Context):
         """Provide a comprehensive explanation of the AdvancedAuction cog and its commands."""
         
-        help_embed = discord.Embed(title="AdvancedAuction Cog Help", 
+        help_embed = discord.Embed(title="Auction Cog Help", 
                                    description="This cog provides a comprehensive auction system for your Discord server.",
                                    color=discord.Color.blue())
         
