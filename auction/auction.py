@@ -1119,6 +1119,71 @@ class AdvancedAuction(commands.Cog):
         await self.config.guild(guild).auctions.set(cleaned_auctions)
         
         await ctx.send(f"Cleanup complete. Removed {removed_count} old auctions.")
+    
+    @commands.command()
+    async def auctionhelp(self, ctx: commands.Context):
+        """Provide a comprehensive explanation of the AdvancedAuction cog and its commands."""
+        
+        help_embed = discord.Embed(title="AdvancedAuction Cog Help", 
+                                   description="This cog provides a comprehensive auction system for your Discord server.",
+                                   color=discord.Color.blue())
+        
+        help_embed.add_field(name="Overview", value="""
+        The AdvancedAuction cog allows users to create, manage, and participate in auctions within your Discord server. 
+        It features scheduled auctions, auto-bidding, featured auctions, and detailed analytics.
+        """, inline=False)
+        
+        help_embed.add_field(name="Key Features", value="""
+        • Create and manage auctions
+        • Schedule auctions for future dates
+        • Auto-bidding system
+        • Featured auctions
+        • Auction reminders
+        • Detailed auction information and history
+        • Admin controls and analytics
+        """, inline=False)
+        
+        help_embed.add_field(name="User Commands", value="""
+        • `spawnauction`: Start a new auction
+        • `myauctions`: View your active and pending auctions
+        • `auctionhistory`: View your completed auctions
+        • `previewauction <auction_id>`: Preview an upcoming auction
+        • `remindme <auction_id>`: Set a reminder for an auction
+        • `autobid <auction_id> <max_bid>`: Set up an auto-bid
+        • `cancelautobid <auction_id>`: Cancel your auto-bid
+        • `auctioninfo <auction_id>`: Get detailed information about an auction
+        """, inline=False)
+        
+        help_embed.add_field(name="Admin Commands", value="""
+        • `auctionset`: Configure auction settings (use `auctionset` to see subcommands)
+        • `forcestartauction <auction_id>`: Force start a pending auction
+        • `cancelauction <auction_id>`: Cancel an active or pending auction
+        • `auctionreport [days]`: Generate a report of auction activity
+        • `setfeaturedauction <auction_id>`: Set an auction as featured
+        • `cleanupauctions`: Remove old completed and cancelled auctions
+        """, inline=False)
+        
+        help_embed.add_field(name="How It Works", value="""
+        1. Admins set up the cog using `auctionset` commands.
+        2. Users create auctions using the auction request button or command.
+        3. Auctions can be scheduled or start immediately after approval.
+        4. Users bid on active auctions in the designated channel.
+        5. Auto-bidding can be set up to bid automatically up to a max amount.
+        6. Auctions end after a set time, with possible extensions for last-minute bids.
+        7. Winners must pay within a time limit or face consequences.
+        8. Admins can view reports and manage auctions as needed.
+        """, inline=False)
+        
+        help_embed.add_field(name="Tips", value="""
+        • Use reminders to never miss an auction you're interested in.
+        • Set up auto-bids to compete even when you're not actively watching.
+        • Keep an eye on featured auctions for high-value or special items.
+        • Admins should regularly check auction reports for insights.
+        """, inline=False)
+        
+        help_embed.set_footer(text="For more detailed help on specific commands, use [p]help command")
+        
+        await ctx.send(embed=help_embed)
 
     def cog_unload(self):
         """Clean up on cog unload."""
