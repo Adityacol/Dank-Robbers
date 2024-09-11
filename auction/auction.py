@@ -5,20 +5,17 @@ from redbot.core import commands, Config, checks
 from redbot.core.bot import Red
 import aiohttp
 import asyncio
-import time
-import logging
-from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
-import matplotlib.pyplot as plt
-import io
+import logging
+from typing import Optional, Dict, Any, List, Union
 
 log = logging.getLogger("red.economy.AdvancedAuction")
 
 class AuctionScheduleView(discord.ui.View):
-    def __init__(self, cog):
+    def __init__(self, cog: "AdvancedAuction"):
         super().__init__(timeout=300)
         self.cog = cog
-        self.schedule_time = None
+        self.schedule_time: Optional[datetime] = None
 
     @discord.ui.button(label="Schedule Auction", style=discord.ButtonStyle.primary)
     async def schedule_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -31,7 +28,7 @@ class AuctionScheduleView(discord.ui.View):
     class ScheduleModal(discord.ui.Modal, title="Schedule Auction"):
         def __init__(self):
             super().__init__()
-            self.schedule_time = None
+            self.schedule_time: Optional[datetime] = None
 
         time_input = discord.ui.TextInput(
             label="Enter time (YYYY-MM-DD HH:MM)",
@@ -42,7 +39,7 @@ class AuctionScheduleView(discord.ui.View):
         async def on_submit(self, interaction: discord.Interaction):
             try:
                 self.schedule_time = datetime.strptime(self.time_input.value, "%Y-%m-%d %H:%M")
-                if self.schedule_time < datetime.now():
+                if self.schedule_time < datetime.utcnow():
                     await interaction.response.send_message("Scheduled time must be in the future.", ephemeral=True)
                     self.schedule_time = None
                 else:
@@ -50,6 +47,11 @@ class AuctionScheduleView(discord.ui.View):
             except ValueError:
                 await interaction.response.send_message("Invalid date format. Please use YYYY-MM-DD HH:MM", ephemeral=True)
                 self.schedule_time = None
+
+    async def on_timeout(self):
+        for child in self.children:
+            child.disabled = True
+        await self.message.edit(view=self)
 
 class AdvancedAuction(commands.Cog):
     def __init__(self, bot: Red):
@@ -72,7 +74,11 @@ class AdvancedAuction(commands.Cog):
             "leaderboard": {},
             "max_active_auctions": 10,
             "auction_cooldown": 86400,  # 24 hours in seconds
-            "featured_auction": None
+            "featured_auction": None,
+            "banned_users": [],
+            "auction_moderators": [],
+            "minimum_bid_increment": 1000,
+            "auction_extension_time": 300,
         }
         default_member: Dict[str, Any] = {
             "auction_reminders": [],
@@ -80,32 +86,38 @@ class AdvancedAuction(commands.Cog):
         }
         self.config.register_guild(**default_guild)
         self.config.register_member(**default_member)
-        self.active_auctions = {}
-        self.auction_tasks = {}
+        self.active_auctions: Dict[str, asyncio.Task] = {}
+        self.auction_tasks: Dict[str, asyncio.Task] = {}
         self.queue_lock = asyncio.Lock()
-        self.queue_task = None
+        self.queue_task: Optional[asyncio.Task] = None
 
-    async def cog_load(self):
+    async def cog_load(self) -> None:
         self.queue_task = self.bot.loop.create_task(self.queue_manager())
 
-    async def cog_unload(self):
+    async def cog_unload(self) -> None:
         if self.queue_task:
             self.queue_task.cancel()
+        for task in self.auction_tasks.values():
+            task.cancel()
+        for task in self.active_auctions.values():
+            task.cancel()
 
-    async def queue_manager(self):
+    async def queue_manager(self) -> None:
         while True:
             try:
                 await self.process_queue()
                 await asyncio.sleep(60)  # Check every minute
+            except asyncio.CancelledError:
+                break
             except Exception as e:
                 log.error(f"Error in queue manager: {e}", exc_info=True)
                 await asyncio.sleep(60)  # Wait a bit before retrying
 
-    async def process_queue(self):
+    async def process_queue(self) -> None:
         async with self.queue_lock:
             for guild in self.bot.guilds:
                 scheduled_auctions = await self.config.guild(guild).scheduled_auctions()
-                current_time = datetime.now().timestamp()
+                current_time = int(datetime.utcnow().timestamp())
                 
                 for auction_id, scheduled_time in list(scheduled_auctions.items()):
                     if current_time >= scheduled_time:
@@ -165,14 +177,78 @@ class AdvancedAuction(commands.Cog):
     @auctionset.command(name="setauctionlimit")
     async def set_auction_limit(self, ctx: commands.Context, limit: int):
         """Set the maximum number of active auctions allowed at once."""
+        if limit < 1:
+            await ctx.send("The auction limit must be at least 1.")
+            return
         await self.config.guild(ctx.guild).max_active_auctions.set(limit)
         await ctx.send(f"Maximum active auctions set to {limit}.")
 
     @auctionset.command(name="setauctioncooldown")
     async def set_auction_cooldown(self, ctx: commands.Context, hours: int):
         """Set the cooldown period between auctions for a user."""
+        if hours < 0:
+            await ctx.send("The cooldown period cannot be negative.")
+            return
         await self.config.guild(ctx.guild).auction_cooldown.set(hours * 3600)  # Convert to seconds
         await ctx.send(f"Auction cooldown set to {hours} hours.")
+
+    @auctionset.command(name="setminimumbidincrement")
+    async def set_minimum_bid_increment(self, ctx: commands.Context, amount: int):
+        """Set the minimum bid increment for auctions."""
+        if amount < 1:
+            await ctx.send("The minimum bid increment must be at least 1.")
+            return
+        await self.config.guild(ctx.guild).minimum_bid_increment.set(amount)
+        await ctx.send(f"Minimum bid increment set to {amount}.")
+
+    @auctionset.command(name="setauctionextensiontime")
+    async def set_auction_extension_time(self, ctx: commands.Context, seconds: int):
+        """Set the auction extension time when a bid is placed near the end."""
+        if seconds < 0:
+            await ctx.send("The auction extension time cannot be negative.")
+            return
+        await self.config.guild(ctx.guild).auction_extension_time.set(seconds)
+        await ctx.send(f"Auction extension time set to {seconds} seconds.")
+
+    @auctionset.command(name="addauctionmoderator")
+    async def add_auction_moderator(self, ctx: commands.Context, user: discord.Member):
+        """Add a user as an auction moderator."""
+        async with self.config.guild(ctx.guild).auction_moderators() as moderators:
+            if user.id not in moderators:
+                moderators.append(user.id)
+                await ctx.send(f"{user.mention} has been added as an auction moderator.")
+            else:
+                await ctx.send(f"{user.mention} is already an auction moderator.")
+
+    @auctionset.command(name="removeauctionmoderator")
+    async def remove_auction_moderator(self, ctx: commands.Context, user: discord.Member):
+        """Remove a user from the auction moderators."""
+        async with self.config.guild(ctx.guild).auction_moderators() as moderators:
+            if user.id in moderators:
+                moderators.remove(user.id)
+                await ctx.send(f"{user.mention} has been removed from the auction moderators.")
+            else:
+                await ctx.send(f"{user.mention} is not an auction moderator.")
+
+    @auctionset.command(name="banuser")
+    async def ban_user(self, ctx: commands.Context, user: discord.Member):
+        """Ban a user from participating in auctions."""
+        async with self.config.guild(ctx.guild).banned_users() as banned_users:
+            if user.id not in banned_users:
+                banned_users.append(user.id)
+                await ctx.send(f"{user.mention} has been banned from participating in auctions.")
+            else:
+                await ctx.send(f"{user.mention} is already banned from participating in auctions.")
+
+    @auctionset.command(name="unbanuser")
+    async def unban_user(self, ctx: commands.Context, user: discord.Member):
+        """Unban a user, allowing them to participate in auctions again."""
+        async with self.config.guild(ctx.guild).banned_users() as banned_users:
+            if user.id in banned_users:
+                banned_users.remove(user.id)
+                await ctx.send(f"{user.mention} has been unbanned and can now participate in auctions.")
+            else:
+                await ctx.send(f"{user.mention} is not currently banned from participating in auctions.")
 
     @commands.command()
     @checks.admin_or_permissions(manage_guild=True)
@@ -188,7 +264,8 @@ class AdvancedAuction(commands.Cog):
         embed.set_thumbnail(url=self.bot.user.display_avatar.url)
         embed.add_field(name="How it works", value="1. Click the button below.\n2. Fill out the modal with donation details.\n3. Await further instructions in your private channel.", inline=False)
         embed.set_footer(text="Thank you for contributing to our community!")
-        await channel.send(embed=embed, view=view)
+        message = await channel.send(embed=embed, view=view)
+        view.message = message
         await ctx.send(f"Auction request embed spawned in {channel.mention}")
 
     async def api_check(self, interaction: discord.Interaction, item_count: int, item_name: str) -> tuple:
@@ -213,26 +290,26 @@ class AdvancedAuction(commands.Cog):
                     total_value = item_value * item_count
                     tax = total_value * 0.10  # 10% tax
                     
-                    if total_value < 500000:  # 50 million
-                        await interaction.followup.send("The total donation value must be over 50 million.", ephemeral=True)
+                    if total_value < 500000000:  # 500 million
+                        await interaction.followup.send("The total donation value must be over 500 million.", ephemeral=True)
                         return None, None, None
 
                     return item_value, total_value, tax
 
-            except Exception as e:
+            except aiohttp.ClientError as e:
                 await interaction.followup.send(f"An error occurred while fetching item value: {str(e)}", ephemeral=True)
-                log.error(f"Exception in API check: {e}")
+                log.error(f"API check error: {e}", exc_info=True)
                 return None, None, None
 
-    async def get_next_auction_id(self, guild: discord.Guild):
+    async def get_next_auction_id(self, guild: discord.Guild) -> str:
         """Generate the next auction ID."""
-        auctions = await self.config.guild(guild).auctions()
-        existing_ids = [int(aid.split('-')[1]) for aid in auctions.keys() if '-' in aid]
-        next_id = max(existing_ids, default=0) + 1
-        return f"{guild.id}-{next_id}"
+        async with self.config.guild(guild).auctions() as auctions:
+            existing_ids = [int(aid.split('-')[1]) for aid in auctions.keys() if '-' in aid]
+            next_id = max(existing_ids, default=0) + 1
+            return f"{guild.id}-{next_id}"
 
     class AuctionModal(Modal):
-        def __init__(self, cog):
+        def __init__(self, cog: "AdvancedAuction"):
             self.cog = cog
             super().__init__(title="Request An Auction")
 
@@ -241,8 +318,6 @@ class AdvancedAuction(commands.Cog):
         minimum_bid = TextInput(label="What should the minimum bid be?", placeholder="e.g., 1,000,000", required=False)
         message = TextInput(label="What is your message?", placeholder="e.g., I love DR!", required=False, max_length=200)
         category = TextInput(label="Category", placeholder="e.g., Rare", required=False)
-        reserve_price = TextInput(label="Reserve Price (optional)", placeholder="e.g., 10,000,000", required=False)
-        buy_out_price = TextInput(label="Buy-out Price (optional)", placeholder="e.g., 50,000,000", required=False)
 
         async def on_submit(self, interaction: discord.Interaction):
             try:
@@ -252,8 +327,6 @@ class AdvancedAuction(commands.Cog):
                 min_bid = self.minimum_bid.value or "1,000,000"
                 message = self.message.value
                 category = self.category.value or "General"
-                reserve_price = self.reserve_price.value
-                buy_out_price = self.buy_out_price.value
 
                 log.info(f"Submitted values: item={item_name}, count={item_count}, min_bid={min_bid}, category={category}")
 
@@ -263,96 +336,94 @@ class AdvancedAuction(commands.Cog):
                 await interaction.followup.send("Would you like to schedule this auction?", view=view, ephemeral=True)
                 await view.wait()
 
-                self.cog.bot.loop.create_task(self.process_auction(interaction, item_name, item_count, min_bid, message, category, reserve_price, buy_out_price, view.schedule_time))
+                await self.cog.process_auction_request(interaction, item_name, item_count, min_bid, message, category, view.schedule_time)
 
             except Exception as e:
                 log.error(f"An error occurred in modal submission: {e}", exc_info=True)
                 await interaction.followup.send(f"An error occurred while processing your submission. Please try again or contact an administrator.", ephemeral=True)
 
-        async def process_auction(self, interaction, item_name, item_count, min_bid, message, category, reserve_price, buy_out_price, schedule_time):
-            try:
-                item_count = int(item_count)
-                if item_count <= 0:
-                    raise ValueError("Item count must be positive")
-            except ValueError as e:
-                await interaction.followup.send(f"Invalid item count: {e}", ephemeral=True)
-                return
+    async def process_auction_request(self, interaction: discord.Interaction, item_name: str, item_count: str, min_bid: str, message: str, category: str, schedule_time: Optional[datetime]):
+        try:
+            item_count = int(item_count)
+            if item_count <= 0:
+                raise ValueError("Item count must be positive")
+        except ValueError as e:
+            await interaction.followup.send(f"Invalid item count: {e}", ephemeral=True)
+            return
 
-            item_value, total_value, tax = await self.cog.api_check(interaction, item_count, item_name)
-            if not item_value:
-                return
+        item_value, total_value, tax = await self.api_check(interaction, item_count, item_name)
+        if not item_value:
+            return
 
-            guild = interaction.guild
-            auction_id = await self.cog.get_next_auction_id(guild)
+        guild = interaction.guild
+        auction_id = await self.get_next_auction_id(guild)
 
-            auction_data = {
-                "auction_id": auction_id,
-                "guild_id": guild.id,
-                "user_id": interaction.user.id,
-                "item": item_name,
-                "amount": item_count,
-                "min_bid": min_bid,
-                "message": message,
-                "category": category,
-                "reserve_price": int(reserve_price) if reserve_price else None,
-                "buy_out_price": int(buy_out_price) if buy_out_price else None,
-                "status": "pending",
-                "start_time": int(time.time()),
-                "end_time": int(time.time()) + 21600,  # 6 hours
-                "item_value": item_value,
-                "total_value": total_value,
-                "tax": tax,
-                "donated_amount": 0,
-                "donated_tax": 0,
-                "current_bid": int(min_bid.replace(',', '')),
-                "current_bidder": None,
-                "bid_history": [],
-                "auto_bids": {}
-            }
+        auction_data = {
+            "auction_id": auction_id,
+            "guild_id": guild.id,
+            "user_id": interaction.user.id,
+            "item": item_name,
+            "amount": item_count,
+            "min_bid": min_bid,
+            "message": message,
+            "category": category,
+            "status": "pending",
+            "start_time": int(datetime.utcnow().timestamp()),
+            "end_time": int((datetime.utcnow() + timedelta(hours=6)).timestamp()),  # 6 hours
+            "item_value": item_value,
+            "total_value": total_value,
+            "tax": tax,
+            "donated_amount": 0,
+            "donated_tax": 0,
+            "current_bid": int(min_bid.replace(',', '')),
+            "current_bidder": None,
+            "bid_history": [],
+            "auto_bids": {},
+        }
 
-            if schedule_time:
-                auction_data['scheduled_time'] = schedule_time.timestamp()
-                auction_data['status'] = 'scheduled'
-                async with self.cog.config.guild(guild).scheduled_auctions() as scheduled:
-                    scheduled[auction_id] = schedule_time.timestamp()
-                await interaction.followup.send(f"Auction scheduled for {schedule_time}")
-            else:
-                await self.cog.finalize_auction(guild, auction_data)
+        if schedule_time:
+            auction_data['scheduled_time'] = int(schedule_time.timestamp())
+            auction_data['status'] = 'scheduled'
+            async with self.config.guild(guild).scheduled_auctions() as scheduled:
+                scheduled[auction_id] = auction_data['scheduled_time']
+            await interaction.followup.send(f"Auction scheduled for {schedule_time}")
+        else:
+            await self.finalize_auction_request(guild, auction_data)
 
-            async with self.cog.config.guild(guild).auctions() as auctions:
-                auctions[auction_id] = auction_data
+        async with self.config.guild(guild).auctions() as auctions:
+            auctions[auction_id] = auction_data
 
-            embed = discord.Embed(
-                title="Your Auction Details",
-                description=f"Please donate {item_count} of {item_name} as you have mentioned in the modal or you will get blacklisted.",
-                color=discord.Color.blue()
-            )
-            embed.add_field(name="Item", value=f"{item_count}x {item_name}", inline=False)
-            embed.add_field(name="Minimum Bid", value=min_bid, inline=True)
-            embed.add_field(name="Market Price (each)", value=f"{item_value:,}", inline=True)
-            embed.add_field(name="Total Value", value=f"{total_value:,}", inline=True)
-            embed.add_field(name="Tax (10%)", value=f"{tax:,}", inline=True)
-            if schedule_time:
-                embed.add_field(name="Scheduled Time", value=f"<t:{int(schedule_time.timestamp())}:F>", inline=False)
-            else:
-                embed.add_field(name="Channel closes in", value="6 hours", inline=True)
-            embed.set_footer(text="This channel will be deleted after 6 hours.")
+        embed = discord.Embed(
+            title="Your Auction Details",
+            description=f"Please donate {item_count} of {item_name} as you have mentioned in the modal or you will get blacklisted.",
+            color=discord.Color.blue()
+        )
+        embed.add_field(name="Item", value=f"{item_count}x {item_name}", inline=False)
+        embed.add_field(name="Minimum Bid", value=min_bid, inline=True)
+        embed.add_field(name="Market Price (each)", value=f"{item_value:,}", inline=True)
+        embed.add_field(name="Total Value", value=f"{total_value:,}", inline=True)
+        embed.add_field(name="Tax (10%)", value=f"{tax:,}", inline=True)
+        if schedule_time:
+            embed.add_field(name="Scheduled Time", value=f"<t:{int(schedule_time.timestamp())}:F>", inline=False)
+        else:
+            embed.add_field(name="Channel closes in", value="6 hours", inline=True)
+        embed.set_footer(text="This channel will be deleted after 6 hours.")
 
-            view = self.cog.AuctionControlView(self.cog, auction_id)
-            await interaction.followup.send(content=interaction.user.mention, embed=embed, view=view)
+        view = self.AuctionControlView(self, auction_id)
+        await interaction.followup.send(content=interaction.user.mention, embed=embed, view=view)
 
-            # Assign the auction role
-            auction_role_id = await self.cog.config.guild(guild).auction_role()
-            if auction_role_id:
-                auction_role = guild.get_role(auction_role_id)
-                if auction_role:
-                    await interaction.user.add_roles(auction_role)
+        # Assign the auction role
+        auction_role_id = await self.config.guild(guild).auction_role()
+        if auction_role_id:
+            auction_role = guild.get_role(auction_role_id)
+            if auction_role:
+                await interaction.user.add_roles(auction_role)
 
-            # Schedule the auction end
-            self.cog.bot.loop.create_task(self.cog.schedule_auction_end(auction_id, 21600))  # 6 hours
+        # Schedule the auction end
+        self.auction_tasks[auction_id] = self.bot.loop.create_task(self.schedule_auction_end(auction_id, 21600))  # 6 hours
 
     class AuctionControlView(View):
-        def __init__(self, cog, auction_id):
+        def __init__(self, cog: "AdvancedAuction", auction_id: str):
             super().__init__(timeout=None)
             self.cog = cog
             self.auction_id = auction_id
@@ -361,14 +432,40 @@ class AdvancedAuction(commands.Cog):
         async def close_auction(self, interaction: discord.Interaction, button: discord.ui.Button):
             await self.cog.close_auction(interaction, self.auction_id, "User closed the auction")
 
+        @discord.ui.button(label="Pause Auction", style=discord.ButtonStyle.secondary)
+        async def pause_auction(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await self.cog.pause_auction(interaction, self.auction_id)
+
+        @discord.ui.button(label="Resume Auction", style=discord.ButtonStyle.success)
+        async def resume_auction(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await self.cog.resume_auction(interaction, self.auction_id)
+
+        async def interaction_check(self, interaction: discord.Interaction) -> bool:
+            user = interaction.user
+            async with self.cog.config.guild(interaction.guild).auctions() as auctions:
+                auction = auctions.get(self.auction_id)
+                if not auction:
+                    await interaction.response.send_message("This auction no longer exists.", ephemeral=True)
+                    return False
+                is_owner = auction["user_id"] == user.id
+            is_admin = interaction.user.guild_permissions.administrator
+            async with self.cog.config.guild(interaction.guild).auction_moderators() as moderators:
+                is_moderator = user.id in moderators
+            return is_owner or is_admin or is_moderator
+
     class AuctionView(View):
-        def __init__(self, cog):
+        def __init__(self, cog: "AdvancedAuction"):
             super().__init__(timeout=None)
             self.cog = cog
 
         @discord.ui.button(label="Request Auction", style=discord.ButtonStyle.green)
         async def request_auction_button(self, interaction: discord.Interaction, button: discord.ui.Button):
             try:
+                async with self.cog.config.guild(interaction.guild).banned_users() as banned_users:
+                    if interaction.user.id in banned_users:
+                        await interaction.response.send_message("You are banned from participating in auctions.", ephemeral=True)
+                        return
+
                 modal = self.cog.AuctionModal(self.cog)
                 await interaction.response.send_modal(modal)
             except Exception as e:
@@ -376,7 +473,7 @@ class AdvancedAuction(commands.Cog):
                 await interaction.followup.send(f"An error occurred while sending the modal: {str(e)}", ephemeral=True)
 
     @commands.Cog.listener()
-    async def on_message(self, message):
+    async def on_message(self, message: discord.Message):
         if message.author.bot and message.author.id != 270904126974590976:  # Ignore all bots except Dank Memer
             return
 
@@ -385,7 +482,7 @@ class AdvancedAuction(commands.Cog):
         else:
             await self.handle_potential_bid(message)
 
-    async def handle_dank_memer_message(self, message):
+    async def handle_dank_memer_message(self, message: discord.Message):
         log.info(f"Received message from Dank Memer: {message.content}")
 
         if not message.embeds:
@@ -400,7 +497,7 @@ class AdvancedAuction(commands.Cog):
             await self.handle_donation(message)
         elif embed.title == "Pending Confirmation":
             try:
-                def check(before, after):
+                def check(before: discord.Message, after: discord.Message):
                     return (before.id == message.id and 
                             after.embeds and 
                             "Successfully donated" in after.embeds[0].description)
@@ -412,23 +509,22 @@ class AdvancedAuction(commands.Cog):
         else:
             log.info("Not a donation message")
 
-    async def handle_donation(self, message):
+    async def handle_donation(self, message: discord.Message):
         guild = message.guild
-        auctions = await self.config.guild(guild).auctions()
-        
-        log.info(f"Current auctions: {auctions}")
-        log.info(f"Current channel ID: {message.channel.id}")
+        async with self.config.guild(guild).auctions() as auctions:
+            log.info(f"Current auctions: {auctions}")
+            log.info(f"Current channel ID: {message.channel.id}")
 
-        for auction_id, auction in auctions.items():
-            log.info(f"Checking auction {auction_id}: {auction}")
-            if auction["status"] == "pending":
-                log.info(f"Found matching auction: {auction_id}")
-                await self.process_donation(message, auction)
-                break
-        else:
-            log.info("No matching auction found")
+            for auction_id, auction in auctions.items():
+                log.info(f"Checking auction {auction_id}: {auction}")
+                if auction["status"] == "pending":
+                    log.info(f"Found matching auction: {auction_id}")
+                    await self.process_donation(message, guild, auction)
+                    break
+            else:
+                log.info("No matching auction found")
 
-    async def process_donation(self, message, auction):
+    async def process_donation(self, message: discord.Message, guild: discord.Guild, auction: Dict[str, Any]):
         embed = message.embeds[0]
         description = embed.description
         log.info(f"Processing donation: {description}")
@@ -487,12 +583,8 @@ class AdvancedAuction(commands.Cog):
 
             log.info(f"Updated auction: {auction}")
 
-            if remaining_tax < 0:
-                await message.channel.send("The tax payment exceeds the required amount. Please contact an administrator.")
-                return
-
             if remaining_amount <= 0 and remaining_tax <= 0:
-                await self.finalize_auction(message.guild, auction)
+                await self.finalize_auction_request(guild, auction)
             else:
                 embed = discord.Embed(
                     title="Donation Received",
@@ -505,19 +597,20 @@ class AdvancedAuction(commands.Cog):
                     embed.add_field(name="Remaining Tax", value=f"⏣ {remaining_tax:,}", inline=False)
                 await message.channel.send(embed=embed)
 
-            await self.config.guild(message.guild).auctions.set_raw(auction["auction_id"], value=auction)
+            async with self.config.guild(guild).auctions() as auctions:
+                auctions[auction["auction_id"]] = auction
 
         except Exception as e:
             log.error(f"Error processing donation: {e}", exc_info=True)
             await message.channel.send(f"An error occurred while processing the donation: {str(e)}. Please contact an administrator.")
 
-    async def handle_potential_bid(self, message):
+    async def handle_potential_bid(self, message: discord.Message):
         if not self.is_valid_bid_format(message.content):
             return
 
         guild = message.guild
-        auctions = await self.config.guild(guild).auctions()
-        active_auction = next((a for a in auctions.values() if a['status'] == 'active' and a['auction_channel_id'] == message.channel.id), None)
+        async with self.config.guild(guild).auctions() as auctions:
+            active_auction = next((a for a in auctions.values() if a['status'] == 'active' and a['auction_channel_id'] == message.channel.id), None)
 
         if not active_auction:
             return
@@ -527,7 +620,12 @@ class AdvancedAuction(commands.Cog):
             await message.channel.send(f"Your bid must be higher than the current bid of {active_auction['current_bid']:,}.")
             return
 
-        if active_auction['buy_out_price'] and bid_amount >= active_auction['buy_out_price']:
+        min_increment = await self.config.guild(guild).minimum_bid_increment()
+        if bid_amount < active_auction['current_bid'] + min_increment:
+            await message.channel.send(f"Your bid must be at least {min_increment:,} higher than the current bid.")
+            return
+
+        if 'buy_out_price' in active_auction and bid_amount >= active_auction['buy_out_price']:
             await self.end_auction(guild, active_auction['auction_id'], message.author, bid_amount)
             return
 
@@ -536,9 +634,8 @@ class AdvancedAuction(commands.Cog):
         active_auction['bid_history'].append({
             'user_id': message.author.id,
             'amount': bid_amount,
-            'timestamp': int(time.time())
+            'timestamp': int(datetime.utcnow().timestamp())
         })
-        await self.config.guild(guild).auctions.set_raw(active_auction['auction_id'], value=active_auction)
 
         await message.add_reaction("✅")
         embed = discord.Embed(title="New Highest Bid", color=discord.Color.green())
@@ -547,34 +644,44 @@ class AdvancedAuction(commands.Cog):
         await message.channel.send(embed=embed)
 
         # Extend auction time and check for anti-sniping
-        if int(time.time()) + 300 > active_auction['end_time']:  # If less than 5 minutes left
-            active_auction['end_time'] = int(time.time()) + 300  # Extend by 5 minutes
-            await message.channel.send("Auction extended by 5 minutes due to last-minute bid!")
+        current_time = int(datetime.utcnow().timestamp())
+        extension_time = await self.config.guild(guild).auction_extension_time()
+        if current_time + extension_time > active_auction['end_time']:
+            active_auction['end_time'] = current_time + extension_time
+            await message.channel.send(f"Auction extended by {extension_time // 60} minutes due to last-minute bid!")
 
-        await self.config.guild(guild).auctions.set_raw(active_auction['auction_id'], value=active_auction)
+        async with self.config.guild(guild).auctions() as auctions:
+            auctions[active_auction['auction_id']] = active_auction
 
         # Process auto-bids
         await self.process_auto_bids(guild, active_auction)
 
-    async def process_auto_bids(self, guild, auction):
-        for user_id, max_bid in auction['auto_bids'].items():
-            if max_bid > auction['current_bid']:
-                new_bid = min(max_bid, auction['current_bid'] + 1)  # Bid the minimum necessary
+    async def process_auto_bids(self, guild: discord.Guild, auction: Dict[str, Any]):
+        min_increment = await self.config.guild(guild).minimum_bid_increment()
+        auto_bids = sorted(auction['auto_bids'].items(), key=lambda x: x[1], reverse=True)
+        
+        for user_id, max_bid in auto_bids:
+            if max_bid > auction['current_bid'] + min_increment:
+                new_bid = min(max_bid, auction['current_bid'] + min_increment)
                 auction['current_bid'] = new_bid
-                auction['current_bidder'] = user_id
+                auction['current_bidder'] = int(user_id)
                 auction['bid_history'].append({
-                    'user_id': user_id,
+                    'user_id': int(user_id),
                     'amount': new_bid,
-                    'timestamp': int(time.time()),
+                    'timestamp': int(datetime.utcnow().timestamp()),
                     'auto_bid': True
                 })
-                await self.config.guild(guild).auctions.set_raw(auction['auction_id'], value=auction)
 
-                user = guild.get_member(user_id)
+                user = guild.get_member(int(user_id))
                 if user:
                     channel = self.bot.get_channel(auction['auction_channel_id'])
                     if channel:
                         await channel.send(f"Auto-bid: {user.mention} has bid {new_bid:,}")
+            else:
+                break  # No need to check lower auto-bids
+
+        async with self.config.guild(guild).auctions() as auctions:
+            auctions[auction['auction_id']] = auction
 
     def is_valid_bid_format(self, content: str) -> bool:
         return content.replace(',', '').isdigit() or content.lower().endswith(('k', 'm', 'b'))
@@ -590,27 +697,31 @@ class AdvancedAuction(commands.Cog):
         else:
             return int(content)
 
-    async def finalize_auction(self, guild, auction):
+    async def finalize_auction_request(self, guild: discord.Guild, auction: Dict[str, Any]):
         auction["status"] = "active"
-        channel = self.bot.get_channel(auction["auction_channel_id"])
-        if channel:
-            await channel.send("All items and tax have been donated. Your auction will be queued shortly!")
+        auction['auction_channel_id'] = await self.config.guild(guild).auction_channel()
+        auction_channel = self.bot.get_channel(auction['auction_channel_id'])
+        if auction_channel:
+            await auction_channel.send("All items and tax have been donated. Your auction will be queued shortly!")
 
-        await self.config.guild(guild).auctions.set_raw(auction["auction_id"], value=auction)
+        async with self.config.guild(guild).auctions() as auctions:
+            auctions[auction["auction_id"]] = auction
 
         async with self.config.guild(guild).auction_queue() as queue:
             queue.append(auction["auction_id"])
 
         self.bot.loop.create_task(self.process_queue())
 
-    async def start_scheduled_auction(self, guild, auction_id):
-        auction = await self.config.guild(guild).auctions.get_raw(auction_id)
-        auction['status'] = 'pending'
-        await self.config.guild(guild).auctions.set_raw(auction_id, value=auction)
+    async def start_scheduled_auction(self, guild: discord.Guild, auction_id: str):
+        async with self.config.guild(guild).auctions() as auctions:
+            auction = auctions[auction_id]
+            auction['status'] = 'pending'
+            auctions[auction_id] = auction
         await self.start_auction(guild, auction_id)
 
-    async def start_auction(self, guild, auction_id):
-        auction = await self.config.guild(guild).auctions.get_raw(auction_id)
+    async def start_auction(self, guild: discord.Guild, auction_id: str):
+        async with self.config.guild(guild).auctions() as auctions:
+            auction = auctions[auction_id]
         queue_channel_id = await self.config.guild(guild).queue_channel()
         queue_channel = self.bot.get_channel(queue_channel_id)
 
@@ -640,16 +751,16 @@ class AdvancedAuction(commands.Cog):
         embed.add_field(name="Beginning Bid", value=auction['min_bid'], inline=True)
         embed.add_field(name="Auction Worth", value=f"{auction['total_value']:,}", inline=True)
         embed.add_field(name="Category", value=auction['category'], inline=True)
-        if auction['reserve_price']:
+        if 'reserve_price' in auction:
             embed.add_field(name="Reserve Price", value=f"{auction['reserve_price']:,}", inline=True)
-        if auction['buy_out_price']:
+        if 'buy_out_price' in auction:
             embed.add_field(name="Buy-out Price", value=f"{auction['buy_out_price']:,}", inline=True)
         embed.add_field(name="Reactions Needed", value="5", inline=True)
 
         message = await queue_channel.send(content=f"{ping} Auction is about to begin!", embed=embed)
         await message.add_reaction("✅")
 
-        def reaction_check(reaction, user):
+        def reaction_check(reaction: discord.Reaction, user: Union[discord.Member, discord.User]):
             return str(reaction.emoji) == "✅" and reaction.message.id == message.id and not user.bot
 
         try:
@@ -668,8 +779,9 @@ class AdvancedAuction(commands.Cog):
             await queue_channel.send("Not enough interest. Auction cancelled.")
             await self.cancel_auction(guild, auction_id, "Not enough interest")
 
-    async def run_auction(self, guild, auction_id):
-        auction = await self.config.guild(guild).auctions.get_raw(auction_id)
+    async def run_auction(self, guild: discord.Guild, auction_id: str):
+        async with self.config.guild(guild).auctions() as auctions:
+            auction = auctions[auction_id]
         queue_channel_id = await self.config.guild(guild).queue_channel()
         queue_channel = self.bot.get_channel(queue_channel_id)
 
@@ -680,11 +792,12 @@ class AdvancedAuction(commands.Cog):
         await queue_channel.send("Auction Started!")
 
         auction['status'] = 'active'
-        auction['end_time'] = int(time.time()) + 300  # 5 minutes from now
+        auction['end_time'] = int(datetime.utcnow().timestamp()) + 300  # 5 minutes from now
 
-        await self.config.guild(guild).auctions.set_raw(auction_id, value=auction)
+        async with self.config.guild(guild).auctions() as auctions:
+            auctions[auction_id] = auction
 
-        while time.time() < auction['end_time']:
+        while datetime.utcnow().timestamp() < auction['end_time']:
             embed = discord.Embed(
                 title=f"Auction: {auction['amount']}x {auction['item']}",
                 description=f"**Current Highest Bid:** {auction['current_bid']:,}\n**Ends:** <t:{auction['end_time']}:R>",
@@ -693,19 +806,21 @@ class AdvancedAuction(commands.Cog):
             await queue_channel.send(embed=embed)
 
             try:
-                def check_bid(m):
+                def check_bid(m: discord.Message):
                     return (m.channel == queue_channel and 
                             not m.author.bot and 
-                            self.is_valid_bid(m.content, auction['current_bid']))
+                            self.is_valid_bid_format(m.content) and
+                            self.parse_bid_amount(m.content) > auction['current_bid'])
 
                 bid_msg = await self.bot.wait_for('message', check=check_bid, timeout=30.0)
                 
                 new_bid = self.parse_bid_amount(bid_msg.content)
                 auction['current_bid'] = new_bid
                 auction['current_bidder'] = bid_msg.author.id
-                auction['end_time'] = int(time.time()) + 60  # Extend by 1 minute
+                auction['end_time'] = int(datetime.utcnow().timestamp()) + 60  # Extend by 1 minute
 
-                await self.config.guild(guild).auctions.set_raw(auction_id, value=auction)
+                async with self.config.guild(guild).auctions() as auctions:
+                    auctions[auction_id] = auction
                 await queue_channel.send(f"Accepted bid of {new_bid:,} from {bid_msg.author.mention}")
 
                 # Process auto-bids
@@ -720,8 +835,9 @@ class AdvancedAuction(commands.Cog):
                         new_bid = self.parse_bid_amount(bid_msg.content)
                         auction['current_bid'] = new_bid
                         auction['current_bidder'] = bid_msg.author.id
-                        auction['end_time'] = int(time.time()) + 60  # Extend by 1 minute
-                        await self.config.guild(guild).auctions.set_raw(auction_id, value=auction)
+                        auction['end_time'] = int(datetime.utcnow().timestamp()) + 60  # Extend by 1 minute
+                        async with self.config.guild(guild).auctions() as auctions:
+                            auctions[auction_id] = auction
                         await queue_channel.send(f"Accepted bid of {new_bid:,} from {bid_msg.author.mention}")
                         await self.process_auto_bids(guild, auction)
                         break
@@ -734,8 +850,9 @@ class AdvancedAuction(commands.Cog):
 
         await self.end_auction(guild, auction_id)
 
-    async def end_auction(self, guild, auction_id):
-        auction = await self.config.guild(guild).auctions.get_raw(auction_id)
+    async def end_auction(self, guild: discord.Guild, auction_id: str):
+        async with self.config.guild(guild).auctions() as auctions:
+            auction = auctions[auction_id]
         queue_channel_id = await self.config.guild(guild).queue_channel()
         queue_channel = self.bot.get_channel(queue_channel_id)
         log_channel_id = await self.config.guild(guild).log_channel()
@@ -785,7 +902,13 @@ class AdvancedAuction(commands.Cog):
 
         # Remove the auction from the queue
         async with self.config.guild(guild).auction_queue() as queue:
-            queue.remove(auction_id)
+            if auction_id in queue:
+                queue.remove(auction_id)
+
+        # Clean up the auction
+        await self.clean_auction_channel(guild, auction['auction_channel_id'])
+        async with self.config.guild(guild).auctions() as auctions:
+            auctions.pop(auction_id, None)
 
         # Start the next auction if there's one in the queue
         if queue:
@@ -793,7 +916,7 @@ class AdvancedAuction(commands.Cog):
         else:
             await self.display_upcoming_auctions(guild)
 
-    async def handle_payment_failure(self, guild, auction, failed_bidder):
+    async def handle_payment_failure(self, guild: discord.Guild, auction: Dict[str, Any], failed_bidder: Optional[discord.Member]):
         queue_channel_id = await self.config.guild(guild).queue_channel()
         queue_channel = self.bot.get_channel(queue_channel_id)
 
@@ -803,9 +926,9 @@ class AdvancedAuction(commands.Cog):
 
         # Blacklist the failed bidder
         blacklist_role_id = await self.config.guild(guild).blacklist_role()
-        if blacklist_role_id:
+        if blacklist_role_id and failed_bidder:
             blacklist_role = guild.get_role(blacklist_role_id)
-            if blacklist_role and failed_bidder:
+            if blacklist_role:
                 await failed_bidder.add_roles(blacklist_role)
                 await queue_channel.send(f"{failed_bidder.mention} has been blacklisted for failing to pay.")
 
@@ -835,8 +958,6 @@ class AdvancedAuction(commands.Cog):
                 return
             except asyncio.TimeoutError:
                 await queue_channel.send(f"{bidder.mention} failed to pay in time.")
-                await self.handle_payment_failure(guild, auction, bidder)
-                return
 
         # If we've reached this point, all potential winners have failed to pay
         await queue_channel.send("All potential winners failed to pay. Auction cancelled.")
@@ -845,7 +966,8 @@ class AdvancedAuction(commands.Cog):
     async def auctioninfo(self, ctx: commands.Context, auction_id: str):
         """Get detailed information about an auction."""
         guild = ctx.guild
-        auction = await self.config.guild(guild).auctions.get_raw(auction_id)
+        async with self.config.guild(guild).auctions() as auctions:
+            auction = auctions.get(auction_id)
         
         if not auction:
             await ctx.send("Auction not found.")
@@ -871,9 +993,10 @@ class AdvancedAuction(commands.Cog):
     async def forcestartauction(self, ctx: commands.Context, auction_id: str):
         """Force start a pending auction."""
         guild = ctx.guild
-        auction = await self.config.guild(guild).auctions.get_raw(auction_id)
+        async with self.config.guild(guild).auctions() as auctions:
+            auction = auctions.get(auction_id)
         
-        if auction['status'] != 'pending':
+        if not auction or auction['status'] != 'pending':
             await ctx.send("This auction is not in pending status.")
             return
         
@@ -885,22 +1008,50 @@ class AdvancedAuction(commands.Cog):
     async def cancelauction(self, ctx: commands.Context, auction_id: str):
         """Cancel an active or pending auction."""
         guild = ctx.guild
-        auction = await self.config.guild(guild).auctions.get_raw(auction_id)
+        async with self.config.guild(guild).auctions() as auctions:
+            auction = auctions.get(auction_id)
         
-        if auction['status'] not in ['active', 'pending']:
+        if not auction or auction['status'] not in ['active', 'pending']:
             await ctx.send("This auction cannot be cancelled.")
             return
         
         await self.cancel_auction(guild, auction_id, "Cancelled by admin")
         await ctx.send(f"Auction {auction_id} has been cancelled.")
 
+    async def cancel_auction(self, guild: discord.Guild, auction_id: str, reason: str):
+        async with self.config.guild(guild).auctions() as auctions:
+            auction = auctions.get(auction_id)
+            if auction:
+                auction['status'] = 'cancelled'
+                auction['end_time'] = int(datetime.utcnow().timestamp())
+                auction['cancel_reason'] = reason
+                auctions[auction_id] = auction
+        
+        # Remove the auction from the queue if it's there
+        async with self.config.guild(guild).auction_queue() as queue:
+            if auction_id in queue:
+                queue.remove(auction_id)
+
+        # Clean up the auction channel
+        await self.clean_auction_channel(guild, auction['auction_channel_id'])
+        
+        # Notify users
+        queue_channel_id = await self.config.guild(guild).queue_channel()
+        queue_channel = self.bot.get_channel(queue_channel_id)
+        if queue_channel:
+            await queue_channel.send(f"Auction {auction_id} has been cancelled. Reason: {reason}")
+
+        # Cancel any running tasks for this auction
+        if auction_id in self.auction_tasks:
+            self.auction_tasks[auction_id].cancel()
+            del self.auction_tasks[auction_id]
+
     @commands.command()
     async def myauctions(self, ctx: commands.Context):
         """View your active and pending auctions."""
         guild = ctx.guild
-        auctions = await self.config.guild(guild).auctions()
-        
-        user_auctions = [a for a in auctions.values() if a['user_id'] == ctx.author.id and a['status'] in ['active', 'pending']]
+        async with self.config.guild(guild).auctions() as auctions:
+            user_auctions = [a for a in auctions.values() if a['user_id'] == ctx.author.id and a['status'] in ['active', 'pending']]
         
         if not user_auctions:
             await ctx.send("You don't have any active or pending auctions.")
@@ -920,9 +1071,9 @@ class AdvancedAuction(commands.Cog):
     async def auctionhistory(self, ctx: commands.Context, page: int = 1):
         """View your auction history."""
         guild = ctx.guild
-        auctions = await self.config.guild(guild).auctions()
+        async with self.config.guild(guild).auctions() as auctions:
+            user_auctions = [a for a in auctions.values() if a['user_id'] == ctx.author.id and a['status'] == 'completed']
         
-        user_auctions = [a for a in auctions.values() if a['user_id'] == ctx.author.id and a['status'] == 'completed']
         user_auctions.sort(key=lambda x: x['end_time'], reverse=True)
         
         if not user_auctions:
@@ -953,20 +1104,23 @@ class AdvancedAuction(commands.Cog):
     @checks.admin_or_permissions(manage_guild=True)
     async def auctionreport(self, ctx: commands.Context, days: int = 7):
         """Generate a report of auction activity for the specified number of days."""
+        if days <= 0:
+            await ctx.send("The number of days must be greater than 0.")
+            return
+
         guild = ctx.guild
-        auctions = await self.config.guild(guild).auctions()
-        
-        now = int(time.time())
-        start_time = now - (days * 86400)
-        
-        relevant_auctions = [a for a in auctions.values() if a['end_time'] > start_time and a['status'] == 'completed']
+        async with self.config.guild(guild).auctions() as auctions:
+            now = int(datetime.utcnow().timestamp())
+            start_time = now - (days * 86400)
+            
+            relevant_auctions = [a for a in auctions.values() if a['end_time'] > start_time and a['status'] == 'completed']
         
         if not relevant_auctions:
             await ctx.send(f"No completed auctions in the last {days} days.")
             return
         
         total_value = sum(a['current_bid'] for a in relevant_auctions)
-        avg_value = total_value / len(relevant_auctions)
+        avg_value = total_value / len(relevant_auctions) if relevant_auctions else 0
         most_valuable = max(relevant_auctions, key=lambda x: x['current_bid'])
         most_bids = max(relevant_auctions, key=lambda x: len(x['bid_history']))
         
@@ -984,9 +1138,10 @@ class AdvancedAuction(commands.Cog):
     async def setfeaturedauction(self, ctx: commands.Context, auction_id: str):
         """Set an auction as featured, displaying it prominently in the auction channel."""
         guild = ctx.guild
-        auction = await self.config.guild(guild).auctions.get_raw(auction_id)
+        async with self.config.guild(guild).auctions() as auctions:
+            auction = auctions.get(auction_id)
         
-        if auction['status'] != 'active':
+        if not auction or auction['status'] != 'active':
             await ctx.send("Only active auctions can be featured.")
             return
         
@@ -995,7 +1150,7 @@ class AdvancedAuction(commands.Cog):
         
         await self.update_featured_auction(guild)
 
-    async def update_featured_auction(self, guild):
+    async def update_featured_auction(self, guild: discord.Guild):
         """Update the featured auction message in the auction channel."""
         auction_channel_id = await self.config.guild(guild).auction_channel()
         auction_channel = self.bot.get_channel(auction_channel_id)
@@ -1007,14 +1162,18 @@ class AdvancedAuction(commands.Cog):
         if not featured_auction_id:
             return
         
-        auction = await self.config.guild(guild).auctions.get_raw(featured_auction_id)
+        async with self.config.guild(guild).auctions() as auctions:
+            auction = auctions.get(featured_auction_id)
+        
+        if not auction:
+            return
         
         embed = discord.Embed(title="Featured Auction", color=discord.Color.gold())
         embed.add_field(name="Item", value=f"{auction['amount']}x {auction['item']}", inline=False)
         embed.add_field(name="Current Bid", value=f"{auction['current_bid']:,}", inline=True)
         embed.add_field(name="Time Left", value=f"<t:{auction['end_time']}:R>", inline=True)
         embed.set_footer(text=f"Auction ID: {featured_auction_id}")
-        
+
         # Find and update the featured auction message, or send a new one
         async for message in auction_channel.history(limit=100):
             if message.author == self.bot.user and message.embeds and message.embeds[0].title == "Featured Auction":
@@ -1027,9 +1186,10 @@ class AdvancedAuction(commands.Cog):
     async def previewauction(self, ctx: commands.Context, auction_id: str):
         """Preview an upcoming auction."""
         guild = ctx.guild
-        auction = await self.config.guild(guild).auctions.get_raw(auction_id)
+        async with self.config.guild(guild).auctions() as auctions:
+            auction = auctions.get(auction_id)
         
-        if auction['status'] != 'scheduled':
+        if not auction or auction['status'] != 'scheduled':
             await ctx.send("This auction is not scheduled for preview.")
             return
         
@@ -1045,9 +1205,10 @@ class AdvancedAuction(commands.Cog):
     async def remindme(self, ctx: commands.Context, auction_id: str):
         """Set a reminder for an upcoming auction."""
         guild = ctx.guild
-        auction = await self.config.guild(guild).auctions.get_raw(auction_id)
+        async with self.config.guild(guild).auctions() as auctions:
+            auction = auctions.get(auction_id)
         
-        if auction['status'] != 'scheduled':
+        if not auction or auction['status'] != 'scheduled':
             await ctx.send("This auction is not scheduled.")
             return
         
@@ -1061,43 +1222,56 @@ class AdvancedAuction(commands.Cog):
         self.bot.loop.create_task(self.send_reminder(ctx.author.id, guild.id, auction_id, reminder_time))
 
     async def send_reminder(self, user_id: int, guild_id: int, auction_id: str, reminder_time: float):
-        await asyncio.sleep(reminder_time - time.time())
+        await asyncio.sleep(max(0, reminder_time - datetime.utcnow().timestamp()))
         guild = self.bot.get_guild(guild_id)
         user = guild.get_member(user_id)
-        auction = await self.config.guild(guild).auctions.get_raw(auction_id)
+        async with self.config.guild(guild).auctions() as auctions:
+            auction = auctions.get(auction_id)
+        
+        if not auction or auction['status'] != 'scheduled':
+            return
         
         embed = discord.Embed(title="Auction Reminder", color=discord.Color.orange())
         embed.description = f"The auction for {auction['amount']}x {auction['item']} starts in 10 minutes!"
         
-        await user.send(embed=embed)
+        try:
+            await user.send(embed=embed)
+        except discord.HTTPException:
+            pass  # Unable to send DM to the user
 
     @commands.command()
     async def autobid(self, ctx: commands.Context, auction_id: str, max_bid: int):
         """Set up an auto-bid for a specific auction."""
         guild = ctx.guild
-        auction = await self.config.guild(guild).auctions.get_raw(auction_id)
+        async with self.config.guild(guild).auctions() as auctions:
+            auction = auctions.get(auction_id)
 
-        if auction['status'] != 'active':
+        if not auction or auction['status'] != 'active':
             await ctx.send("This auction is not active.")
             return
 
+        if max_bid <= auction['current_bid']:
+            await ctx.send(f"Your maximum bid must be higher than the current bid of {auction['current_bid']:,}.")
+            return
+
         auction['auto_bids'][str(ctx.author.id)] = max_bid
-        await self.config.guild(guild).auctions.set_raw(auction_id, value=auction)
+        auctions[auction_id] = auction
         await ctx.send(f"Auto-bid set for auction {auction_id} up to {max_bid:,}")
 
     @commands.command()
     async def cancelautobid(self, ctx: commands.Context, auction_id: str):
         """Cancel your auto-bid for a specific auction."""
         guild = ctx.guild
-        auction = await self.config.guild(guild).auctions.get_raw(auction_id)
+        async with self.config.guild(guild).auctions() as auctions:
+            auction = auctions.get(auction_id)
 
-        if auction['status'] != 'active':
+        if not auction or auction['status'] != 'active':
             await ctx.send("This auction is not active.")
             return
 
         if str(ctx.author.id) in auction['auto_bids']:
             del auction['auto_bids'][str(ctx.author.id)]
-            await self.config.guild(guild).auctions.set_raw(auction_id, value=auction)
+            auctions[auction_id] = auction
             await ctx.send(f"Your auto-bid for auction {auction_id} has been cancelled.")
         else:
             await ctx.send(f"You don't have an active auto-bid for auction {auction_id}.")
@@ -1107,16 +1281,16 @@ class AdvancedAuction(commands.Cog):
     async def cleanupauctions(self, ctx: commands.Context):
         """Clean up completed and cancelled auctions older than 7 days."""
         guild = ctx.guild
-        auctions = await self.config.guild(guild).auctions()
-        
-        now = int(time.time())
-        seven_days_ago = now - (7 * 86400)
-        
-        cleaned_auctions = {k: v for k, v in auctions.items() if v['status'] not in ['completed', 'cancelled'] or v['end_time'] > seven_days_ago}
-        
-        removed_count = len(auctions) - len(cleaned_auctions)
-        
-        await self.config.guild(guild).auctions.set(cleaned_auctions)
+        async with self.config.guild(guild).auctions() as auctions:
+            now = int(datetime.utcnow().timestamp())
+            seven_days_ago = now - (7 * 86400)
+            
+            cleaned_auctions = {k: v for k, v in auctions.items() if v['status'] not in ['completed', 'cancelled'] or v['end_time'] > seven_days_ago}
+            
+            removed_count = len(auctions) - len(cleaned_auctions)
+            
+            auctions.clear()
+            auctions.update(cleaned_auctions)
         
         await ctx.send(f"Cleanup complete. Removed {removed_count} old auctions.")
     
@@ -1185,10 +1359,105 @@ class AdvancedAuction(commands.Cog):
         
         await ctx.send(embed=help_embed)
 
-    def cog_unload(self):
-        """Clean up on cog unload."""
-        for task in self.auction_tasks.values():
-            task.cancel()
+    async def update_user_stats(self, guild: discord.Guild, user_id: int, amount: int, action: str):
+        """Update user statistics for auctions won or sold."""
+        async with self.config.guild(guild).user_stats() as stats:
+            if str(user_id) not in stats:
+                stats[str(user_id)] = {'won': 0, 'sold': 0}
+            
+            stats[str(user_id)][action] += amount
 
-async def setup(bot):
+    async def clean_auction_channel(self, guild: discord.Guild, channel_id: int):
+        """Clean up the auction channel by removing the AuctionControlView."""
+        channel = guild.get_channel(channel_id)
+        if channel:
+            async for message in channel.history(limit=100):
+                if message.author == self.bot.user and isinstance(message.components[0], self.AuctionControlView):
+                    try:
+                        await message.delete()
+                    except discord.HTTPException:
+                        pass
+
+    async def schedule_auction_end(self, auction_id: str, delay: int):
+        """Schedule an auction to end after a specified delay."""
+        await asyncio.sleep(delay)
+        guild_id = int(auction_id.split('-')[0])
+        guild = self.bot.get_guild(guild_id)
+        if guild:
+            await self.end_auction(guild, auction_id)
+
+    async def start_next_auction(self, guild: discord.Guild):
+        """Start the next auction in the queue."""
+        async with self.config.guild(guild).auction_queue() as queue:
+            if queue:
+                next_auction_id = queue[0]
+                await self.start_auction(guild, next_auction_id)
+
+    async def display_upcoming_auctions(self, guild: discord.Guild):
+        """Display a list of upcoming scheduled auctions."""
+        async with self.config.guild(guild).auctions() as auctions:
+            upcoming_auctions = [a for a in auctions.values() if a['status'] == 'scheduled']
+        upcoming_auctions.sort(key=lambda x: x['scheduled_time'])
+
+        if not upcoming_auctions:
+            return
+
+        embed = discord.Embed(title="Upcoming Auctions", color=discord.Color.blue())
+        for auction in upcoming_auctions[:5]:  # Display up to 5 upcoming auctions
+            embed.add_field(
+                name=f"{auction['amount']}x {auction['item']}",
+                value=f"ID: {auction['auction_id']}\nStarts: <t:{int(auction['scheduled_time'])}:F>",
+                inline=False
+            )
+
+        auction_channel_id = await self.config.guild(guild).auction_channel()
+        auction_channel = guild.get_channel(auction_channel_id)
+        if auction_channel:
+            await auction_channel.send(embed=embed)
+
+    async def pause_auction(self, interaction: discord.Interaction, auction_id: str):
+        """Pause an active auction."""
+        async with self.config.guild(interaction.guild).auctions() as auctions:
+            auction = auctions.get(auction_id)
+
+            if not auction or auction['status'] != 'active':
+                await interaction.response.send_message("This auction is not active.", ephemeral=True)
+                return
+
+            auction['status'] = 'paused'
+            auction['paused_time'] = int(datetime.utcnow().timestamp())
+            auction['original_end_time'] = auction['end_time']  # Store the original end time
+            auction['end_time'] = None  # Clear the end time while paused
+
+            auctions[auction_id] = auction
+
+        await interaction.response.send_message(f"Auction {auction_id} has been paused.", ephemeral=True)
+        await interaction.channel.send(f"Auction {auction_id} has been paused by a moderator.")
+
+    async def resume_auction(self, interaction: discord.Interaction, auction_id: str):
+        """Resume a paused auction."""
+        async with self.config.guild(interaction.guild).auctions() as auctions:
+            auction = auctions.get(auction_id)
+
+            if not auction or auction['status'] != 'paused':
+                await interaction.response.send_message("This auction is not paused.", ephemeral=True)
+                return
+
+            pause_duration = int(datetime.utcnow().timestamp()) - auction['paused_time']
+            auction['end_time'] = auction['original_end_time'] + pause_duration  # Adjust end time
+            auction['status'] = 'active'
+            del auction['paused_time']
+            del auction['original_end_time']
+
+            auctions[auction_id] = auction
+
+        await interaction.response.send_message(f"Auction {auction_id} has been resumed.", ephemeral=True)
+        await interaction.channel.send(f"Auction {auction_id} has been resumed by a moderator.")
+        
+        # Schedule the auction end with the adjusted end time
+        remaining_time = auction['end_time'] - int(datetime.utcnow().timestamp())
+        if remaining_time > 0:
+            self.auction_tasks[auction_id] = self.bot.loop.create_task(self.schedule_auction_end(auction_id, remaining_time))
+
+async def setup(bot: Red):
     await bot.add_cog(AdvancedAuction(bot))
