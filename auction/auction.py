@@ -887,24 +887,32 @@ class AdvancedAuction(commands.Cog):
         guild = ctx.guild
         async with self.config.guild(guild).auctions() as auctions:
             auction = auctions.get(auction_id)
-        
+    
         if not auction:
             await ctx.send("Auction not found.")
             return
-        
+    
         embed = discord.Embed(title=f"Auction Info: {auction_id}", color=discord.Color.blue())
-        embed.add_field(name="Item", value=f"{auction['amount']}x {auction['item']}", inline=False)
-        embed.add_field(name="Current Bid", value=f"{auction['current_bid']:,}", inline=True)
-        embed.add_field(name="Minimum Bid", value=auction['min_bid'], inline=True)
-        embed.add_field(name="Total Value", value=f"{auction['total_value']:,}", inline=True)
-        embed.add_field(name="Status", value=auction['status'].capitalize(), inline=True)
-        embed.add_field(name="Start Time", value=f"<t:{auction['start_time']}:F>", inline=True)
-        embed.add_field(name="End Time", value=f"<t:{auction['end_time']}:F>", inline=True)
-        
-        if auction['current_bidder']:
-            bidder = guild.get_member(auction['current_bidder'])
+        embed.add_field(name="Item", value=f"{auction.get('amount', 'Unknown')}x {auction.get('item', 'Unknown')}", inline=False)
+    
+        current_bid = auction.get('current_bid', auction.get('min_bid', 'Unknown'))
+        embed.add_field(name="Current Bid", value=f"{current_bid:,}" if isinstance(current_bid, int) else str(current_bid), inline=True)
+    
+        embed.add_field(name="Minimum Bid", value=str(auction.get('min_bid', 'Unknown')), inline=True)
+        embed.add_field(name="Total Value", value=f"{auction.get('total_value', 'Unknown'):,}" if isinstance(auction.get('total_value'), int) else 'Unknown', inline=True)
+        embed.add_field(name="Status", value=auction.get('status', 'Unknown').capitalize(), inline=True)
+    
+        start_time = auction.get('start_time', 'Unknown')
+        embed.add_field(name="Start Time", value=f"<t:{start_time}:F>" if isinstance(start_time, int) else str(start_time), inline=True)
+    
+        end_time = auction.get('end_time', 'Unknown')
+        embed.add_field(name="End Time", value=f"<t:{end_time}:F>" if isinstance(end_time, int) else str(end_time), inline=True)
+    
+        current_bidder = auction.get('current_bidder')
+        if current_bidder:
+            bidder = guild.get_member(current_bidder)
             embed.add_field(name="Current Highest Bidder", value=bidder.mention if bidder else "Unknown User", inline=False)
-        
+    
         await ctx.send(embed=embed)
 
     @commands.command()
@@ -970,20 +978,30 @@ class AdvancedAuction(commands.Cog):
         """View your active and pending auctions."""
         guild = ctx.guild
         async with self.config.guild(guild).auctions() as auctions:
-            user_auctions = [a for a in auctions.values() if a['user_id'] == ctx.author.id and a['status'] in ['active', 'pending']]
-        
+            user_auctions = [a for a in auctions.values() if a.get('user_id') == ctx.author.id and a.get('status') in ['active', 'pending']]
+    
         if not user_auctions:
             await ctx.send("You don't have any active or pending auctions.")
             return
-        
+    
         embed = discord.Embed(title="Your Auctions", color=discord.Color.blue())
         for auction in user_auctions:
+            auction_id = auction.get('auction_id', 'Unknown')
+            item = f"{auction.get('amount', 'Unknown')}x {auction.get('item', 'Unknown')}"
+            status = auction.get('status', 'Unknown').capitalize()
+            current_bid = auction.get('current_bid', auction.get('min_bid', 'Unknown'))
+            end_time = auction.get('end_time', 'Unknown')
+
+            value = f"ID: {auction_id}\n"
+            value += f"Current Bid: {current_bid:,}\n" if isinstance(current_bid, int) else f"Current Bid: {current_bid}\n"
+            value += f"Ends: <t:{end_time}:R>" if isinstance(end_time, int) else "End time: Unknown"
+
             embed.add_field(
-                name=f"{auction['amount']}x {auction['item']} ({auction['status'].capitalize()})",
-                value=f"ID: {auction['auction_id']}\nCurrent Bid: {auction['current_bid']:,}\nEnds: <t:{auction['end_time']}:R>",
+                name=f"{item} ({status})",
+                value=value,
                 inline=False
             )
-        
+    
         await ctx.send(embed=embed)
 
     @commands.command()
