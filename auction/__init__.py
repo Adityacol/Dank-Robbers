@@ -1,4 +1,4 @@
-from .auction import AdvancedAuction
+from .auction import EnhancedAdvancedAuction
 
 async def setup(bot):
     cog = AdvancedAuction(bot)
