@@ -1004,7 +1004,7 @@ class SuperEnhancedAdvancedAuction(commands.Cog):
         """Generate a detailed report of auction activity for the specified number of days."""
         guild = ctx.guild
         async with self.config.guild(guild).auction_history() as history:
-            now = datetime.utcnow().timestamp()
+            now = datetime.datetime.utcnow().timestamp()
             relevant_auctions = [a for a in history if now - a['end_time'] <= days * 86400]
 
         if not relevant_auctions:
@@ -1021,12 +1021,21 @@ class SuperEnhancedAdvancedAuction(commands.Cog):
             category_stats[auction['category']]["count"] += 1
             category_stats[auction['category']]["value"] += auction['current_bid']
 
+        # Separate construction for most valuable auction
+        most_valuable_items = ', '.join(f"{item['amount']}x {item['name']}" for item in most_valuable['items'])
+        most_valuable_value = f"{most_valuable['current_bid']:,} ({most_valuable_items})"
+
+        # Separate construction for most bids
+        most_bids_items = ', '.join(f"{item['amount']}x {item['name']}" for item in most_bids['items'])
+        most_bids_value = f"{len(most_bids['bid_history'])} bids ({most_bids_items})"
+
         embed = discord.Embed(title=f"Detailed Auction Report (Last {days} Days)", color=discord.Color.gold())
         embed.add_field(name="Total Auctions", value=len(relevant_auctions), inline=True)
         embed.add_field(name="Total Value", value=f"{total_value:,}", inline=True)
         embed.add_field(name="Average Value", value=f"{avg_value:,.2f}", inline=True)
-        embed.add_field(name="Most Valuable Auction", value=f"{most_valuable['current_bid']:,} ({', '.join(f'{item['amount']}x {item['name']}' for item in most_valuable['items'])})", inline=False)
-        embed.add_field(name="Most Bids", value=f"{len(most_bids['bid_history'])} bids ({', '.join(f'{item['amount']}x {item['name']}' for item in most_bids['items'])})", inline=False)
+        embed.add_field(name="Most Valuable Auction", value=most_valuable_value, inline=False)
+        
+        embed.add_field(name="Most Bids", value=most_bids_value, inline=False)
 
         category_report = "\n".join(f"{cat}: {stats['count']} auctions, {stats['value']:,} total value" for cat, stats in category_stats.items())
         embed.add_field(name="Category Performance", value=category_report, inline=False)
