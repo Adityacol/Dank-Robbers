@@ -1313,41 +1313,70 @@ class EnhancedAdvancedAuction(commands.Cog):
     @commands.command()
     async def auctionhelp(self, ctx: commands.Context):
         """Display help information for the auction system."""
-        embed = discord.Embed(title="Auction System Help", color=discord.Color.blue())
-        embed.add_field(name="General Commands", value="""
+        embeds = []
+
+        general_embed = discord.Embed(title="Auction System Help - General Commands", color=discord.Color.blue())
+        general_embed.add_field(name="Bidding and Info", value="""
         • `[p]bid <amount>`: Place a bid on the current auction
         • `[p]auctioninfo`: Display information about the current auction
         • `[p]mybids`: View your bid history for the current auction
+        """, inline=False)
+        
+        general_embed.add_field(name="Notifications", value="""
         • `[p]togglenotifications <setting>`: Toggle notification settings
         • `[p]notificationsettings`: View your current notification settings
+        """, inline=False)
+        
+        general_embed.add_field(name="History and Stats", value="""
         • `[p]auctionhistory [page]`: View your auction participation history
         • `[p]mystats`: View your personal auction statistics
         • `[p]leaderboard [category]`: View the auction leaderboard
         """, inline=False)
         
-        embed.add_field(name="Admin Commands", value="""
+        embeds.append(general_embed)
+
+        admin_embed1 = discord.Embed(title="Auction System Help - Admin Commands (1/2)", color=discord.Color.green())
+        admin_embed1.add_field(name="Auction Management", value="""
         • `[p]auctionset`: Configure auction settings
         • `[p]spawnauction`: Create a new auction request button
         • `[p]auctionqueue`: Display the current auction queue
         • `[p]skipauction`: Skip the current auction
         • `[p]cancelauction`: Cancel the current auction
         • `[p]auctionreport [days]`: Generate an auction report
+        """, inline=False)
+        
+        admin_embed1.add_field(name="Moderator Management", value="""
         • `[p]setauctionmoderator <user>`: Set a user as auction moderator
         • `[p]removeauctionmoderator <user>`: Remove auction moderator status
         • `[p]listauctionmoderators`: List all auction moderators
+        """, inline=False)
+        
+        admin_embed1.add_field(name="User Management", value="""
         • `[p]blacklistuser <user> [reason]`: Blacklist a user from auctions
         • `[p]unblacklistuser <user>`: Remove a user from the blacklist
         • `[p]listblacklist`: List all blacklisted users
+        """, inline=False)
+        
+        embeds.append(admin_embed1)
+
+        admin_embed2 = discord.Embed(title="Auction System Help - Admin Commands (2/2)", color=discord.Color.green())
+        admin_embed2.add_field(name="Auction Control", value="""
         • `[p]clearbids`: Clear all bids from the current auction
         • `[p]extendauction <minutes>`: Extend the current auction
         • `[p]setcurrentbid <amount>`: Set the current bid for the active auction
         • `[p]removebid <user>`: Remove the last bid of a specific user
+        """, inline=False)
+        
+        admin_embed2.add_field(name="Data Management", value="""
         • `[p]exportauctiondata [format]`: Export auction data
         • `[p]auctionanalytics [days]`: View auction analytics
         • `[p]pruneauctionhistory <days>`: Remove old auction history
         """, inline=False)
         
-        await ctx.send(embed=embed)
+        embeds.append(admin_embed2)
+
+        for embed in embeds:
+            await ctx.send(embed=embed)
 
     def cog_unload(self):
         """Clean up when cog is unloaded."""
