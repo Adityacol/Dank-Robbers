@@ -1,6 +1,6 @@
 import discord
-from discord.ext import commands, tasks
-from redbot.core import Config, checks, bank
+from discord.ext import tasks
+from redbot.core import Config, checks, bank, commands
 from redbot.core.utils.chat_formatting import box, pagify
 from redbot.core.utils.menus import menu, DEFAULT_CONTROLS
 from redbot.core.bot import Red
@@ -2034,5 +2034,8 @@ class AdvancedAuctionSystem(commands.Cog):
         if self.auction_task:
             self.auction_task.cancel()
 
-async def setup(bot: Red):
-    await bot.add_cog(AdvancedAuctionSystem(bot))
+async def setup(bot):
+    """Setup function to add the cog to the bot."""
+    cog = AdvancedAuctionSystem(bot)
+    await bot.add_cog(cog)
+    await cog.initialize()
