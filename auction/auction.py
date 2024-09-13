@@ -66,7 +66,7 @@ class AuctionVisualization:
         return discord.File(buf, filename=f"auction_{auction['auction_id']}_history.png")
 
 class AdvancedAuctionSystem(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: Red):
         self.bot = bot
         self.config = Config.get_conf(self, identifier=95932766180)
         default_guild = {
@@ -2033,7 +2033,6 @@ class AdvancedAuctionSystem(commands.Cog):
         """Cancel any ongoing tasks and perform cleanup."""
         if self.auction_task:
             self.auction_task.cancel()
-        # Perform any additional cleanup here
 
 async def setup(bot):
     """Setup function to add the cog to the bot."""
