@@ -1460,52 +1460,69 @@ class AdvancedAuctionSystem(commands.Cog):
 
     @commands.command()
     async def auctionhelp(self, ctx: commands.Context):
-        """Display help information for the advanced auction system."""
-        embed = discord.Embed(title="Advanced Auction System Help", color=discord.Color.blue())
-        embed.add_field(name="General Commands", value="""
-        • `[p]bid <amount>`: Place a bid on the current auction
-        • `[p]proxybid <amount>`: Set a maximum proxy bid
-        • `[p]auctioninfo [auction_id]`: Display information about the current or a specific auction
-        • `[p]mybids`: View your bid history for the current auction
-        • `[p]togglenotifications <setting>`: Toggle notification settings
-        • `[p]notificationsettings`: View your current notification settings
-        • `[p]myauctionstats`: View your personal auction statistics
-        • `[p]auctionsubscribe <categories>`: Subscribe to auction categories
-        • `[p]auctionunsubscribe <categories>`: Unsubscribe from auction categories
-        • `[p]mysubscriptions`: View your current category subscriptions
-        • `[p]reputation [user]`: View reputation score
-        • `[p]auctionsearch <query>`: Search for auctions
-        • `[p]savesearch <name> <query>`: Save a search query
-        • `[p]runsavedsearch <name>`: Run a saved search query
-        • `[p]listsavedsearches`: List all saved search queries
-        • `[p]deletesavedsearch <name>`: Delete a saved search query
-        • `[p]buyauctioninsurance`: Buy insurance for your current auction
-        • `[p]auctionreminder <auction_id> <minutes>`: Set a reminder for an auction
-        """, inline=False)
-        
-        embed.add_field(name="Admin Commands", value="""
-        • `[p]auctionset`: Configure auction settings
-        • `[p]spawnauction`: Create a new auction request button
-        • `[p]auctionqueue`: Display the current auction queue
-        • `[p]skipauction`: Skip the current auction
-        • `[p]cancelauction <auction_id>`: Cancel a specific auction
-        • `[p]auctionreport [days]`: Generate a detailed auction report
-        • `[p]setauctionmoderator <user>`: Set a user as auction moderator
-        • `[p]removeauctionmoderator <user>`: Remove auction moderator status
-        • `[p]listauctionmoderators`: List all auction moderators
-        • `[p]pruneauctionhistory <days>`: Remove old auction history
-        • `[p]exportauctiondata [format]`: Export detailed auction data
-        • `[p]setreputation <user> <score>`: Set user's reputation score
-        • `[p]resetauctions`: Reset all auction data
-        • `[p]auctionsettings`: Display current auction settings
-        • `[p]setauctionduration <hours>`: Set default auction duration
-        • `[p]setauctionextension <minutes>`: Set auction extension time
-        • `[p]toggleauctionfeature <feature>`: Toggle auction features
-        • `[p]setauctioninsurance <rate>`: Set auction insurance rate
-        • `[p]setbidincrements`: Set custom bid increments
-        """, inline=False)
-        
-        await ctx.send(embed=embed)
+       """Display help information for the advanced auction system."""
+       embeds = []
+    
+       # General Commands Embed
+       embed_general = discord.Embed(title="Advanced Auction System Help - General Commands", color=discord.Color.blue())
+       general_commands = [
+        "• `[p]bid <amount>`: Place a bid on the current auction",
+        "• `[p]proxybid <amount>`: Set a maximum proxy bid",
+        "• `[p]auctioninfo [auction_id]`: Display information about the current or a specific auction",
+        "• `[p]mybids`: View your bid history for the current auction",
+        "• `[p]togglenotifications <setting>`: Toggle notification settings",
+        "• `[p]notificationsettings`: View your current notification settings",
+        "• `[p]myauctionstats`: View your personal auction statistics",
+        "• `[p]auctionsubscribe <categories>`: Subscribe to auction categories",
+        "• `[p]auctionunsubscribe <categories>`: Unsubscribe from auction categories",
+        "• `[p]mysubscriptions`: View your current category subscriptions",
+        "• `[p]reputation [user]`: View reputation score",
+        "• `[p]auctionsearch <query>`: Search for auctions",
+        "• `[p]savesearch <name> <query>`: Save a search query",
+        "• `[p]runsavedsearch <name>`: Run a saved search query",
+        "• `[p]listsavedsearches`: List all saved search queries",
+        "• `[p]deletesavedsearch <name>`: Delete a saved search query",
+        "• `[p]buyauctioninsurance`: Buy insurance for your current auction",
+        "• `[p]auctionreminder <auction_id> <minutes>`: Set a reminder for an auction"
+       ]
+    
+       for i in range(0, len(general_commands), 10):
+           embed_general.add_field(name=f"General Commands {i//10 + 1}", value="\n".join(general_commands[i:i+10]), inline=False)
+    
+       embeds.append(embed_general)
+    
+       # Admin Commands Embed
+       embed_admin = discord.Embed(title="Advanced Auction System Help - Admin Commands", color=discord.Color.red())
+       admin_commands = [
+        "• `[p]auctionset`: Configure auction settings",
+        "• `[p]spawnauction`: Create a new auction request button",
+        "• `[p]auctionqueue`: Display the current auction queue",
+        "• `[p]skipauction`: Skip the current auction",
+        "• `[p]cancelauction <auction_id>`: Cancel a specific auction",
+        "• `[p]auctionreport [days]`: Generate a detailed auction report",
+        "• `[p]setauctionmoderator <user>`: Set a user as auction moderator",
+        "• `[p]removeauctionmoderator <user>`: Remove auction moderator status",
+        "• `[p]listauctionmoderators`: List all auction moderators",
+        "• `[p]pruneauctionhistory <days>`: Remove old auction history",
+        "• `[p]exportauctiondata [format]`: Export detailed auction data",
+        "• `[p]setreputation <user> <score>`: Set user's reputation score",
+        "• `[p]resetauctions`: Reset all auction data",
+        "• `[p]auctionsettings`: Display current auction settings",
+        "• `[p]setauctionduration <hours>`: Set default auction duration",
+        "• `[p]setauctionextension <minutes>`: Set auction extension time",
+        "• `[p]toggleauctionfeature <feature>`: Toggle auction features",
+        "• `[p]setauctioninsurance <rate>`: Set auction insurance rate",
+        "• `[p]setbidincrements`: Set custom bid increments"
+       ]
+    
+       for i in range(0, len(admin_commands), 10):
+           embed_admin.add_field(name=f"Admin Commands {i//10 + 1}", value="\n".join(admin_commands[i:i+10]), inline=False)
+    
+       embeds.append(embed_admin)
+    
+       # Send embeds
+       for embed in embeds:
+           await ctx.send(embed=embed)
 
     def cog_unload(self):
         """Clean up when cog is unloaded."""
