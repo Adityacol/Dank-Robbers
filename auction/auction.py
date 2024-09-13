@@ -2034,8 +2034,5 @@ class AdvancedAuctionSystem(commands.Cog):
         if self.auction_task:
             self.auction_task.cancel()
 
-async def setup(bot):
-    """Setup function to add the cog to the bot."""
-    cog = AdvancedAuctionSystem(bot)
-    await bot.add_cog(cog)
-    await cog.initialize()
+async def setup(bot: Red):
+    await bot.add_cog(AdvancedAuctionSystem(bot))
