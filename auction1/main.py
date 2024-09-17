@@ -7,6 +7,7 @@ from .data_handler import DataHandler
 from .analytics import AnalyticsManager
 from .notification_system import NotificationSystem
 from .reputation_system import ReputationSystem
+from discord.ui import View, Button
 
 class AdvancedAuctionSystem(commands.Cog):
     def __init__(self, bot):
@@ -19,27 +20,31 @@ class AdvancedAuctionSystem(commands.Cog):
         self.auction_manager = AuctionManager(bot, self.data_handler, self.notification_system, self.reputation_system)
         self.bidding_system = BiddingSystem(bot, self.data_handler, self.notification_system, self.reputation_system)
 
-    @commands.command()
-    @checks.admin_or_permissions(manage_guild=True)
-    async def auctionadmin(self, ctx):
-        """Open the admin control panel for the auction system."""
-        admin_panel = AdminPanel(self.bot, self.data_handler, self.auction_manager, self.analytics)
-        await admin_panel.send(ctx)
+    @commands.group(invoke_without_command=True)
+    async def auction(self, ctx):
+        """Advanced Auction System commands"""
+        if ctx.invoked_subcommand is None:
+            await self.auctionhelp(ctx)
 
-    @commands.command()
-    async def createauction(self, ctx):
+    @auction.command(name="help")
+    async def auction_help(self, ctx):
+        """Display help information for the advanced auction system."""
+        await self.auctionhelp(ctx)
+
+    @auction.command(name="create")
+    async def auction_create(self, ctx):
         """Create a new auction."""
         creation_form = AuctionCreationForm(self.bot, self.data_handler, self.auction_manager)
         await ctx.send("Please fill out the auction creation form:", view=creation_form)
 
-    @commands.command()
-    async def browseauctions(self, ctx, category: str = None):
+    @auction.command(name="browse")
+    async def auction_browse(self, ctx, category: str = None):
         """Browse active auctions with optional category filter."""
         browser = AuctionBrowser(self.bot, self.data_handler, category)
         await browser.send(ctx)
 
-    @commands.command()
-    async def myauctions(self, ctx):
+    @auction.command(name="myauctions")
+    async def auction_myauctions(self, ctx):
         """View your active auctions."""
         auctions = await self.data_handler.get_user_auctions(ctx.guild.id, ctx.author.id)
         if not auctions:
@@ -57,8 +62,8 @@ class AdvancedAuctionSystem(commands.Cog):
             )
         await ctx.send(embed=embed)
 
-    @commands.command()
-    async def watchauction(self, ctx, auction_id: int):
+    @auction.command(name="watch")
+    async def auction_watch(self, ctx, auction_id: int):
         """Add an auction to your watch list."""
         success = await self.notification_system.add_to_watchlist(ctx.author.id, auction_id)
         if success:
@@ -66,8 +71,8 @@ class AdvancedAuctionSystem(commands.Cog):
         else:
             await ctx.send("Failed to add the auction to your watch list. Please check the auction ID.")
 
-    @commands.command()
-    async def unwatchauction(self, ctx, auction_id: int):
+    @auction.command(name="unwatch")
+    async def auction_unwatch(self, ctx, auction_id: int):
         """Remove an auction from your watch list."""
         success = await self.notification_system.remove_from_watchlist(ctx.author.id, auction_id)
         if success:
@@ -75,8 +80,8 @@ class AdvancedAuctionSystem(commands.Cog):
         else:
             await ctx.send("Failed to remove the auction from your watch list. Please check the auction ID.")
 
-    @commands.command()
-    async def mywatchlist(self, ctx):
+    @auction.command(name="watchlist")
+    async def auction_watchlist(self, ctx):
         """View your auction watch list."""
         watchlist = await self.notification_system.get_watchlist(ctx.author.id)
         if not watchlist:
@@ -96,8 +101,8 @@ class AdvancedAuctionSystem(commands.Cog):
                 )
         await ctx.send(embed=embed)
 
-    @commands.command()
-    async def myreputation(self, ctx):
+    @auction.command(name="reputation")
+    async def auction_reputation(self, ctx):
         """View your auction reputation."""
         reputation = await self.reputation_system.get_reputation(ctx.author.id)
         embed = discord.Embed(title="Your Auction Reputation", color=discord.Color.gold())
@@ -105,6 +110,30 @@ class AdvancedAuctionSystem(commands.Cog):
         embed.add_field(name="Total Auctions", value=str(reputation['total_auctions']))
         embed.add_field(name="Successful Auctions", value=str(reputation['successful_auctions']))
         await ctx.send(embed=embed)
+
+    @auction.command(name="info")
+    async def auction_info(self, ctx, auction_id: int):
+        """View detailed information about a specific auction."""
+        auction = await self.data_handler.get_auction(ctx.guild.id, auction_id)
+        if not auction:
+            await ctx.send("Auction not found.")
+            return
+
+        embed = discord.Embed(title=f"Auction #{auction_id} Details", color=discord.Color.gold())
+        embed.add_field(name="Item", value=f"{auction['item_name']} (x{auction['quantity']})")
+        embed.add_field(name="Current Bid", value=f"${auction['current_bid']:,}")
+        embed.add_field(name="Top Bidder", value=f"<@{auction['top_bidder']}>" if auction['top_bidder'] else "No bids yet")
+        embed.add_field(name="Status", value=auction['status'].capitalize())
+        embed.add_field(name="Created By", value=f"<@{auction['creator_id']}>")
+        embed.add_field(name="Category", value=auction['category'])
+        await ctx.send(embed=embed)
+
+    @commands.command()
+    @checks.admin_or_permissions(manage_guild=True)
+    async def auctionadmin(self, ctx):
+        """Open the admin control panel for the auction system."""
+        admin_panel = AdminPanel(self.bot, self.data_handler, self.auction_manager, self.analytics)
+        await admin_panel.send(ctx)
 
     @commands.command()
     @checks.admin_or_permissions(manage_guild=True)
@@ -135,6 +164,104 @@ class AdvancedAuctionSystem(commands.Cog):
 
         moderation_panel = AuctionModerationPanel(self.bot, self.data_handler, self.auction_manager, auction)
         await moderation_panel.send(ctx)
+
+    class HelpView(View):
+        def __init__(self, cog):
+            super().__init__()
+            self.cog = cog
+
+        @discord.ui.button(label="General Commands", style=discord.ButtonStyle.primary)
+        async def general_commands(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await interaction.response.send_message(embed=await self.cog.get_general_help(), ephemeral=True)
+
+        @discord.ui.button(label="Admin Commands", style=discord.ButtonStyle.primary)
+        async def admin_commands(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await interaction.response.send_message(embed=await self.cog.get_admin_help(), ephemeral=True)
+
+        @discord.ui.button(label="Auction Process", style=discord.ButtonStyle.secondary)
+        async def auction_process(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await interaction.response.send_message(embed=await self.cog.get_auction_process_help(), ephemeral=True)
+
+        @discord.ui.button(label="Reputation System", style=discord.ButtonStyle.secondary)
+        async def reputation_system(self, interaction: discord.Interaction, button: discord.ui.Button):
+            await interaction.response.send_message(embed=await self.cog.get_reputation_help(), ephemeral=True)
+
+    @commands.command()
+    async def auctionhelp(self, ctx):
+        """Display help information for the advanced auction system."""
+        embed = discord.Embed(title="Advanced Auction System Help", 
+                              description="Click the buttons below to view detailed help for each category.",
+                              color=discord.Color.blue())
+        
+        embed.add_field(name="General Commands", value="Basic commands for all users", inline=False)
+        embed.add_field(name="Admin Commands", value="Commands for server administrators", inline=False)
+        embed.add_field(name="Auction Process", value="Learn how the auction system works", inline=False)
+        embed.add_field(name="Reputation System", value="Understand the reputation mechanics", inline=False)
+
+        view = self.HelpView(self)
+        await ctx.send(embed=embed, view=view)
+
+    async def get_general_help(self):
+        embed = discord.Embed(title="General Auction Commands", color=discord.Color.green())
+        commands = [
+            ("auction create", "Create a new auction"),
+            ("auction browse [category]", "Browse active auctions with optional category filter"),
+            ("auction myauctions", "View your active auctions"),
+            ("auction watch <auction_id>", "Add an auction to your watch list"),
+            ("auction unwatch <auction_id>", "Remove an auction from your watch list"),
+            ("auction watchlist", "View your auction watch list"),
+            ("auction reputation", "View your auction reputation"),
+            ("auction info <auction_id>", "View detailed information about a specific auction")
+        ]
+        for cmd, desc in commands:
+            embed.add_field(name=f"`{cmd}`", value=desc, inline=False)
+        return embed
+
+    async def get_admin_help(self):
+        embed = discord.Embed(title="Admin Auction Commands", color=discord.Color.red())
+        commands = [
+            ("auctionadmin", "Open the admin control panel for the auction system"),
+            ("auctionanalytics", "View auction analytics"),
+            ("moderateauction <auction_id>", "Open the moderation panel for a specific auction"),
+            ("setauctionchannel <channel>", "Set the channel for auction announcements"),
+            ("setlogchannel <channel>", "Set the channel for auction logs"),
+            ("setpayoutchannel <channel>", "Set the channel for payout instructions"),
+            ("setblacklistrole <role>", "Set the role for blacklisted users"),
+            ("setauctionduration <seconds>", "Set the default duration for auctions in seconds")
+        ]
+        for cmd, desc in commands:
+            embed.add_field(name=f"`{cmd}`", value=desc, inline=False)
+        return embed
+
+    async def get_auction_process_help(self):
+        embed = discord.Embed(title="Auction Process", color=discord.Color.gold())
+        steps = [
+            ("Creation", "An auction is created by a user or admin"),
+            ("Queuing", "The auction is added to the queue"),
+            ("Activation", "When it's the auction's turn, it becomes active"),
+            ("Bidding", "Users can place bids on the active auction"),
+            ("Extension", "If a bid is placed in the last minute, the auction is extended"),
+            ("Completion", "The auction ends, and the highest bidder wins"),
+            ("Payment", "The winner must confirm payment"),
+            ("Delivery", "The auctioned item is delivered to the winner")
+        ]
+        for step, desc in steps:
+            embed.add_field(name=step, value=desc, inline=False)
+        return embed
+
+    async def get_reputation_help(self):
+        embed = discord.Embed(title="Reputation System", color=discord.Color.purple())
+        info = [
+            ("Reputation Score", "A numerical value representing a user's trustworthiness"),
+            ("Gaining Reputation", "Successfully complete auctions as a buyer or seller"),
+            ("Losing Reputation", "Fail to pay for won auctions or cancel auctions"),
+            ("Reputation Tiers", "Different levels of reputation unlock new privileges"),
+            ("Tier Benefits", "Higher tiers may allow participation in high-value auctions"),
+            ("Viewing Reputation", "Use the `auction reputation` command to see your current standing")
+        ]
+        for topic, desc in info:
+            embed.add_field(name=topic, value=desc, inline=False)
+        return embed
 
 async def setup(bot):
     await bot.add_cog(AdvancedAuctionSystem(bot))
