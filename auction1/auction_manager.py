@@ -1,7 +1,6 @@
 import discord
 import asyncio
 from datetime import datetime, timedelta
-from .ui_components import AuctionEmbed, BiddingButtons
 
 class AuctionManager:
     def __init__(self, bot, data_handler, notification_system, reputation_system):
@@ -13,25 +12,23 @@ class AuctionManager:
         self.current_auction = None
         self.bot.loop.create_task(self.auction_loop())
 
-    async def create_auction(self, ctx, auction_data):
+    async def create_auction(self, interaction: discord.Interaction, auction_data: dict):
         if not self.validate_auction_data(auction_data):
-            await ctx.send("Invalid auction data. Please check your inputs.")
+            await interaction.response.send_message("Invalid auction data. Please check your inputs.", ephemeral=True)
             return
 
-        channel = await self.create_auction_channel(ctx.guild, auction_data)
-        await self.track_donation(channel, ctx.author, auction_data)
+        channel = await self.create_auction_channel(interaction.guild, auction_data)
+        await self.track_donation(channel, interaction.user, auction_data)
         auction_data['channel_id'] = channel.id
-        auction_id = await self.data_handler.create_auction(ctx.guild.id, auction_data)
+        auction_id = await self.data_handler.create_auction(interaction.guild.id, auction_data)
         await self.auction_queue.put(auction_id)
 
-        await ctx.send(f"Auction created and added to queue. Channel: {channel.mention}")
+        await interaction.response.send_message(f"Auction created and added to queue. Channel: {channel.mention}", ephemeral=True)
 
-    async def validate_auction_data(self, auction_data):
+    def validate_auction_data(self, auction_data):
         if auction_data['min_bid'] <= 0 or auction_data['quantity'] <= 0:
             return False
-        item_value = await self.data_handler.get_item_value(auction_data['item_name'])
-        total_value = item_value * auction_data['quantity']
-        return auction_data['min_bid'] <= total_value * 0.6
+        return True
 
     async def create_auction_channel(self, guild, auction_data):
         category = discord.utils.get(guild.categories, name="Auctions")
@@ -42,7 +39,7 @@ class AuctionManager:
         await channel.set_permissions(guild.default_role, read_messages=True, send_messages=False)
         return channel
 
-    async def track_donation(self, channel, user, auction_data):
+    async def track_donation(self, channel: discord.TextChannel, user: discord.Member, auction_data: dict):
         await channel.send(f"{user.mention} Please confirm your donation of {auction_data['quantity']}x {auction_data['item_name']} by typing 'confirm'.")
 
         def check(m):
@@ -72,7 +69,8 @@ class AuctionManager:
 
         await channel.set_permissions(channel.guild.default_role, send_messages=True)
 
-        embed = AuctionEmbed(auction_data)
+        embed = self.create_auction_embed(auction_data)
+        from .ui_components import BiddingButtons  # Import here to avoid circular import
         buttons = BiddingButtons(self.bot, self.data_handler)
         message = await channel.send(embed=embed, view=buttons)
 
@@ -97,6 +95,16 @@ class AuctionManager:
                 await channel.send("🕒 A bid was placed in the last minute! Auction extended by 2 minutes.")
 
         await self.end_auction(channel, message, auction_data)
+
+    def create_auction_embed(self, auction_data):
+        embed = discord.Embed(title="🎉 Exciting Auction! 🎉", color=discord.Color.gold())
+        embed.set_thumbnail(url="https://example.com/auction_gif.gif")
+        embed.add_field(name="Item", value=f"{auction_data['quantity']}x {auction_data['item_name']}")
+        embed.add_field(name="Current Bid", value=f"${auction_data['current_bid']:,}")
+        embed.add_field(name="Top Bidder", value=auction_data['top_bidder'] or "No bids yet")
+        embed.add_field(name="Category", value=auction_data['category'])
+        embed.set_footer(text="Click the buttons below to place your bid!")
+        return embed
 
     async def check_recent_bids(self, auction_id):
         auction = await self.data_handler.get_auction(self.bot.guilds[0].id, auction_id)
@@ -214,28 +222,13 @@ class AuctionManager:
 
         return True
 
-    async def moderate_auction(self, auction_id: int, action: str, reason: str = None):
+    async def warn_participants(self, auction_id: int, warning_message: str):
         auction = await self.data_handler.get_auction(self.bot.guilds[0].id, auction_id)
         if not auction:
             return False
 
-        if action == 'cancel':
-            await self.cancel_auction(self.bot.get_channel(auction['channel_id']), auction)
-        elif action == 'extend':
-            await self.extend_auction(auction_id, 600)  # Extend by 10 minutes
-        elif action == 'warn':
-            await self.warn_participant(auction, reason)
-
-        return True
-
-    async def warn_participant(self, auction: dict, reason: str):
         channel = self.bot.get_channel(auction['channel_id'])
         if channel:
-            await channel.send(f"⚠️ Warning: {reason}")
+            await channel.send(f"⚠️ Warning: {warning_message}")
 
-        log_channel_id = await self.data_handler.get_setting(channel.guild.id, 'log_channel')
-        log_channel = self.bot.get_channel(log_channel_id)
-
-        if log_channel:
-            await log_channel.send(f"Warning issued for Auction #{auction['id']}.\n"
-                                   f"Reason: {reason}")
+        return True
