@@ -1,6 +1,16 @@
 import discord
 from discord.ui import View, Button, Modal, TextInput
 
+class AuctionEmbed(discord.Embed):
+    def __init__(self, auction_data):
+        super().__init__(title="🎉 Exciting Auction! 🎉", color=discord.Color.gold())
+        self.set_thumbnail(url="https://example.com/auction_gif.gif")
+        self.add_field(name="Item", value=f"{auction_data['quantity']}x {auction_data['item_name']}")
+        self.add_field(name="Current Bid", value=f"${auction_data['current_bid']:,}")
+        self.add_field(name="Top Bidder", value=auction_data['top_bidder'] or "No bids yet")
+        self.add_field(name="Category", value=auction_data['category'])
+        self.set_footer(text="Click the buttons below to place your bid!")
+
 class AdminPanel(View):
     def __init__(self, bot, data_handler, auction_manager, analytics):
         super().__init__()

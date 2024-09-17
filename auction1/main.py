@@ -210,8 +210,8 @@ class AdvancedAuctionSystem(commands.Cog):
 
     @commands.command()
     async def auctionhelp(self, ctx):
-        """Display help information for the advanced auction system."""
-        embed = discord.Embed(title="Advanced Auction System Help", 
+        """Display help information for the auction system."""
+        embed = discord.Embed(title=" Auction System Help", 
                               description="Click the buttons below to view detailed help for each category.",
                               color=discord.Color.blue())
         
