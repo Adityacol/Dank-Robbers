@@ -9,6 +9,16 @@ from .notification_system import NotificationSystem
 from .reputation_system import ReputationSystem
 from discord.ui import View, Button
 
+class PersistentView(View):
+    def __init__(self, cog):
+        super().__init__(timeout=None)
+        self.cog = cog
+
+    @discord.ui.button(label="Create Auction", style=discord.ButtonStyle.green, custom_id="create_auction")
+    async def create_auction(self, interaction: discord.Interaction, button: discord.ui.Button):
+        creation_form = AuctionCreationForm(self.cog.bot, self.cog.data_handler, self.cog.auction_manager)
+        await interaction.response.send_modal(creation_form)
+
 class AdvancedAuctionSystem(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -19,6 +29,24 @@ class AdvancedAuctionSystem(commands.Cog):
         self.reputation_system = ReputationSystem(self.data_handler)
         self.auction_manager = AuctionManager(bot, self.data_handler, self.notification_system, self.reputation_system)
         self.bidding_system = BiddingSystem(bot, self.data_handler, self.notification_system, self.reputation_system)
+        self.persistent_views_added = False
+
+    async def cog_load(self):
+        if not self.persistent_views_added:
+            self.bot.add_view(PersistentView(self))
+            self.persistent_views_added = True
+
+    @commands.command()
+    @checks.admin_or_permissions(manage_guild=True)
+    async def spawnauction(self, ctx):
+        """Spawn the auction creation button."""
+        view = PersistentView(self)
+        embed = discord.Embed(
+            title="Create an Auction",
+            description="Click the button below to create a new auction.",
+            color=discord.Color.green()
+        )
+        await ctx.send(embed=embed, view=view)
 
     @commands.group(invoke_without_command=True)
     async def auction(self, ctx):
@@ -30,12 +58,6 @@ class AdvancedAuctionSystem(commands.Cog):
     async def auction_help(self, ctx):
         """Display help information for the advanced auction system."""
         await self.auctionhelp(ctx)
-
-    @auction.command(name="create")
-    async def auction_create(self, ctx):
-        """Create a new auction."""
-        creation_form = AuctionCreationForm(self.bot, self.data_handler, self.auction_manager)
-        await ctx.send("Please fill out the auction creation form:", view=creation_form)
 
     @auction.command(name="browse")
     async def auction_browse(self, ctx, category: str = None):
@@ -204,7 +226,6 @@ class AdvancedAuctionSystem(commands.Cog):
     async def get_general_help(self):
         embed = discord.Embed(title="General Auction Commands", color=discord.Color.green())
         commands = [
-            ("auction create", "Create a new auction"),
             ("auction browse [category]", "Browse active auctions with optional category filter"),
             ("auction myauctions", "View your active auctions"),
             ("auction watch <auction_id>", "Add an auction to your watch list"),
@@ -220,14 +241,10 @@ class AdvancedAuctionSystem(commands.Cog):
     async def get_admin_help(self):
         embed = discord.Embed(title="Admin Auction Commands", color=discord.Color.red())
         commands = [
+            ("spawnauction", "Spawn the auction creation button"),
             ("auctionadmin", "Open the admin control panel for the auction system"),
             ("auctionanalytics", "View auction analytics"),
-            ("moderateauction <auction_id>", "Open the moderation panel for a specific auction"),
-            ("setauctionchannel <channel>", "Set the channel for auction announcements"),
-            ("setlogchannel <channel>", "Set the channel for auction logs"),
-            ("setpayoutchannel <channel>", "Set the channel for payout instructions"),
-            ("setblacklistrole <role>", "Set the role for blacklisted users"),
-            ("setauctionduration <seconds>", "Set the default duration for auctions in seconds")
+            ("moderateauction <auction_id>", "Open the moderation panel for a specific auction")
         ]
         for cmd, desc in commands:
             embed.add_field(name=f"`{cmd}`", value=desc, inline=False)
@@ -236,7 +253,7 @@ class AdvancedAuctionSystem(commands.Cog):
     async def get_auction_process_help(self):
         embed = discord.Embed(title="Auction Process", color=discord.Color.gold())
         steps = [
-            ("Creation", "An auction is created by a user or admin"),
+            ("Creation", "An auction is created using the persistent button"),
             ("Queuing", "The auction is added to the queue"),
             ("Activation", "When it's the auction's turn, it becomes active"),
             ("Bidding", "Users can place bids on the active auction"),
@@ -264,4 +281,6 @@ class AdvancedAuctionSystem(commands.Cog):
         return embed
 
 async def setup(bot):
-    await bot.add_cog(AdvancedAuctionSystem(bot))
+    cog = AdvancedAuctionSystem(bot)
+    await bot.add_cog(cog)
+    await cog.cog_load()
