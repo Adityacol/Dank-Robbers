@@ -206,3 +206,65 @@ class WarnParticipantsModal(Modal):
     async def on_submit(self, interaction: discord.Interaction):
         await self.auction_manager.warn_participants(self.auction_id, self.warning_message.value)
         await interaction.response.send_message("Warning message sent to auction participants.", ephemeral=True)
+
+class BiddingButtons(View):
+    def __init__(self, bot, data_handler):
+        super().__init__()
+        self.bot = bot
+        self.data_handler = data_handler
+
+    @discord.ui.button(label="Place Bid", style=discord.ButtonStyle.primary)
+    async def place_bid(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = PlaceBidModal(self.bot, self.data_handler)
+        await interaction.response.send_modal(modal)
+
+    @discord.ui.button(label="View Bid History", style=discord.ButtonStyle.secondary)
+    async def view_history(self, interaction: discord.Interaction, button: discord.ui.Button):
+        auction_data = await self.data_handler.get_current_auction(interaction.guild_id)
+        if not auction_data:
+            await interaction.response.send_message("No active auction found.", ephemeral=True)
+            return
+
+        bid_history = auction_data.get('bid_history', [])
+        embed = discord.Embed(title="Bid History", color=discord.Color.blue())
+        for idx, bid in enumerate(bid_history, start=1):
+            user = self.bot.get_user(bid['user_id'])
+            user_name = user.name if user else f"User {bid['user_id']}"
+            embed.add_field(name=f"Bid #{idx}", value=f"{user_name}: ${bid['amount']:,}", inline=False)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+class PlaceBidModal(Modal):
+    def __init__(self, bot, data_handler):
+        super().__init__(title="Place a Bid")
+        self.bot = bot
+        self.data_handler = data_handler
+
+        self.bid_amount = TextInput(label="Bid Amount")
+        self.add_item(self.bid_amount)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            amount = int(self.bid_amount.value)
+            auction_data = await self.data_handler.get_current_auction(interaction.guild_id)
+            if not auction_data:
+                await interaction.response.send_message("No active auction found.", ephemeral=True)
+                return
+
+            if amount <= auction_data['current_bid']:
+                await interaction.response.send_message(f"Your bid must be higher than the current bid of ${auction_data['current_bid']:,}.", ephemeral=True)
+                return
+
+            await self.data_handler.update_bid(interaction.guild_id, auction_data['id'], interaction.user.id, amount)
+            await interaction.response.send_message(f"Your bid of ${amount:,} has been placed!", ephemeral=True)
+
+            # Update auction embed
+            channel = self.bot.get_channel(auction_data['channel_id'])
+            message = await channel.fetch_message(auction_data['message_id'])
+            embed = message.embeds[0]
+            embed.set_field_at(1, name="Current Bid", value=f"${amount:,}")
+            embed.set_field_at(2, name="Top Bidder", value=interaction.user.mention)
+            await message.edit(embed=embed)
+
+        except ValueError:
+            await interaction.response.send_message("Invalid bid amount. Please enter a number.", ephemeral=True)
