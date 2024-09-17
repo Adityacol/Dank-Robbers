@@ -1,0 +1,26 @@
+{
+    "author": ["Aditya"],
+    "name": "AdvancedAuctionSystem",
+    "description": "An advanced auction system for Red-DiscordBot with Dank Memer integration. Features include multi-item auctions, proxy bidding, auction scheduling, dynamic pricing, reputation system, and comprehensive analytics.",
+    "install_msg": "Thanks for installing the Advanced Auction System cog! Use `[p]help AdvancedAuctionSystem` to see all available commands. Make sure to set up the necessary channels and roles using `[p]auctionset` before starting.",
+    "short": "Advanced auction system with extensive features",
+    "tags": ["auction", "economy", "dank memer", "analytics", "bidding", "proxy bidding", "multi-item"],
+    "type": "COG",
+    "end_user_data_statement": "This cog stores user IDs, auction history, bid history, reputation scores, notification preferences, and saved searches. Users can request deletion of their data using Red's data deletion tools.",
+    "min_bot_version": "3.5.0",
+    "hidden": false,
+    "disabled": false,
+    "required_cogs": {},
+    "requirements": ["matplotlib", "aiohttp", "seaborn"],
+    "permissions": [
+        "manage_channels",
+        "manage_roles",
+        "manage_messages",
+        "embed_links",
+        "attach_files",
+        "add_reactions",
+        "use_external_emojis"
+    ],
+    "tech_setup": "Requires a running instance of Red-DiscordBot and Dank Memer bot in the server. Make sure to install the required Python libraries: matplotlib, aiohttp, and seaborn.",
+    "extra_info": "This cog provides a comprehensive auction system with features such as multi-item auctions, proxy bidding, auction scheduling, dynamic pricing, a reputation system, and detailed analytics. It integrates with Dank Memer for item valuation and currency transactions. Admins should carefully configure the cog settings for optimal performance in their server economy. Use `[p]auctionset` to configure channels, roles, and other settings. The cog includes advanced analytics tools and visualizations to help track auction trends and user activity."
+}
